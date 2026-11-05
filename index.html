@@ -1,0 +1,1507 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#e8f0f6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Glutfrost">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Glutfrost</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#e8f0f6;touch-action:none;
+    user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  canvas{display:block;position:fixed;inset:0;width:100vw;height:100vh}
+  #menuBtn{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top));width:44px;height:44px;border-radius:12px;
+    border:none;background:rgba(30,45,60,.55);color:#fff;font-size:22px;cursor:pointer;z-index:5}
+  .ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(20,30,45,.55);z-index:10}
+  .ov.hidden{display:none}
+  .card{background:#fff;border-radius:18px;padding:22px 22px 18px;max-width:360px;width:calc(100% - 64px);
+    box-shadow:0 10px 40px rgba(0,0,0,.3);color:#223}
+  .card h2{margin:0 0 10px;font-size:22px}
+  .card p,.card li{font-size:14px;line-height:1.45;color:#445}
+  .card ul{padding-left:18px;margin:8px 0}
+  .card button{display:block;width:100%;margin-top:10px;padding:12px;border-radius:12px;border:none;font-size:16px;
+    font-weight:700;cursor:pointer;background:#e9eef3;color:#223}
+  .card button.pri{background:#2fb84a;color:#fff}
+  .card button.dan{background:#fbe3e3;color:#a22}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="menuBtn" aria-label="Menü">☰</button>
+
+<div id="menu" class="ov hidden"><div class="card">
+  <h2>Glutfrost</h2>
+  <button class="pri" id="bResume">Weiterspielen</button>
+  <button id="bHelp">Anleitung</button>
+  <button id="bMute">Ton: an</button>
+  <button class="dan" id="bReset">Spielstand löschen</button>
+</div></div>
+
+<div id="help" class="ov hidden"><div class="card">
+  <h2>So wird gespielt</h2>
+  <ul>
+    <li><b>Bewegen:</b> irgendwo auf den Bildschirm tippen und ziehen (oder WASD / Pfeiltasten).</li>
+    <li>Deine <b>Äxte</b> kreisen automatisch und treffen alles in der Nähe: Eisbären, Bäume, Erzfelsen.</li>
+    <li>Rohes <b>Fleisch</b> → Feld links am Ofen. Gebratenes Fleisch abholen → zur <b>Theke</b> bringen.</li>
+    <li>Die Überlebenden bezahlen. <b>Geld</b> am Geldstapel einsammeln.</li>
+    <li>Stell dich auf ein <b>Bau-Feld</b>, um Geld einzuzahlen und Upgrades zu kaufen.</li>
+    <li>Draußen wird dir <b>kalt</b>! Am Ofen wärmst du dich auf. Bei <b>Schneesturm</b> doppelt aufpassen – dafür zahlt Kohle doppelt.</li>
+    <li>Im Wald lauert der <b>Yeti</b>. Weiche den roten Kreisen aus!</li>
+    <li><b>Ziel:</b> Bring den Ofen auf Stufe 5 und rette das Lager.</li>
+  </ul>
+  <button class="pri" id="bHelpOk">Los geht's</button>
+</div></div>
+
+<div id="offline" class="ov hidden"><div class="card">
+  <h2>Willkommen zurück!</h2>
+  <p id="offTxt"></p>
+  <button class="pri" id="bOff">Einsammeln</button>
+</div></div>
+
+<div id="confirm" class="ov hidden"><div class="card">
+  <h2>Wirklich neu starten?</h2>
+  <p>Dein gesamter Fortschritt geht verloren.</p>
+  <button class="dan" id="bYes">Ja, löschen</button>
+  <button id="bNo">Abbrechen</button>
+</div></div>
+
+<script>
+'use strict';
+// =====================================================================
+//  GLUTFROST – ein Idle-Arcade-Survival-Spiel
+// =====================================================================
+const TAU = Math.PI * 2;
+const rand = (a, b) => a + Math.random() * (b - a);
+const randi = (a, b) => Math.floor(rand(a, b + 1));
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+const lerp = (a, b, t) => a + (b - a) * t;
+
+const cv = document.getElementById('c');
+let ctx = cv.getContext('2d');
+// ---------- Sprite-Cache: statische Grafiken einmal vorrendern ----------
+const SPR = {}; let sprK = 0;
+function sprite(key, w, h, ox, oy, fn) {
+  const k = Z * DPR;
+  if (k !== sprK) { for (const q in SPR) delete SPR[q]; sprK = k; }
+  let sp = SPR[key];
+  if (!sp) {
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w * k)); c.height = Math.max(1, Math.ceil(h * k));
+    const g = c.getContext('2d'); g.setTransform(k, 0, 0, k, ox * k, oy * k);
+    const old = ctx; ctx = g; try { fn(); } finally { ctx = old; }
+    sp = SPR[key] = { c, w, h, ox, oy };
+  }
+  return sp;
+}
+function blit(sp) { ctx.drawImage(sp.c, -sp.ox, -sp.oy, sp.w, sp.h); }
+let W = 0, H = 0, DPR = 1, Z = 1;
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = innerWidth; H = innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  Z = clamp(Math.min(W / 560, H / 860), 0.5, 1.25);
+}
+addEventListener('resize', resize); resize();
+
+// ---------- Projektion (leicht geneigte Draufsicht) ----------
+const TY = 0.78;
+let camX = 0, camY = 0;
+function setT(a, b, c, d, e, f) { ctx.setTransform(a * DPR, b * DPR, c * DPR, d * DPR, e * DPR, f * DPR); }
+let shake = 0, shX = 0, shY = 0;
+function P(x, y, z = 0) { return [W / 2 + shX + (x - camX) * Z, H / 2 + shY + ((y - camY) * TY - z) * Z]; }
+function at(x, y, z = 0, s = 1) { const p = P(x, y, z); setT(Z * s, 0, 0, Z * s, p[0], p[1]); }
+function groundT() { setT(Z, 0, 0, Z * TY, W / 2 + shX - camX * Z, H / 2 + shY - camY * TY * Z); }
+function screenT() { setT(1, 0, 0, 1, 0, 0); }
+function onScreen(x, y, m = 160) {
+  const p = P(x, y);
+  return p[0] > -m * Z && p[0] < W + m * Z && p[1] > -m * Z * 2.2 && p[1] < H + m * Z;
+}
+
+// ---------- Zeichen-Helfer ----------
+function ell(x, y, rx, ry, c) { ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(x, y, Math.max(0, rx), Math.max(0, ry), 0, 0, TAU); ctx.fill(); }
+function rr(x, y, w, h, r, c) {
+  ctx.fillStyle = c; ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+  ctx.fill();
+}
+function poly(pts, c) {
+  ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+  ctx.closePath(); ctx.fill();
+}
+function txt(s, x, y, size, col, align = 'center', stroke = 'rgba(0,0,0,.55)', weight = 800) {
+  ctx.font = `${weight} ${size}px system-ui,-apple-system,Segoe UI,Roboto,sans-serif`;
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  if (stroke) { ctx.lineWidth = Math.max(2, size / 6); ctx.strokeStyle = stroke; ctx.lineJoin = 'round'; ctx.strokeText(s, x, y); }
+  ctx.fillStyle = col; ctx.fillText(s, x, y);
+}
+
+// ---------- Sound ----------
+let AC = null; const sndLast = {};
+const SND = {
+  hit: [170, .05, 'square', .035], chop: [260, .05, 'square', .03], coin: [990, .06, 'sine', .045],
+  pick: [560, .035, 'triangle', .04], drop: [380, .035, 'triangle', .04], buy: [520, .35, 'sine', .08],
+  hurt: [110, .18, 'sawtooth', .05], warn: [240, .5, 'sine', .07], boom: [70, .35, 'sawtooth', .08],
+};
+function snd(k) {
+  if (S.muted) return;
+  const now = performance.now(); if (sndLast[k] && now - sndLast[k] < 45) return; sndLast[k] = now;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const [f, d, type, v] = SND[k]; const t = AC.currentTime;
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (k === 'buy') { o.frequency.setValueAtTime(f, t); o.frequency.setValueAtTime(f * 1.25, t + .1); o.frequency.setValueAtTime(f * 1.5, t + .2); }
+    if (k === 'coin') o.frequency.exponentialRampToValueAtTime(f * 1.5, t + d);
+    if (k === 'boom' || k === 'hurt') o.frequency.exponentialRampToValueAtTime(f * .5, t + d);
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + d + .02);
+  } catch (e) { }
+}
+
+// =====================================================================
+//  SPIELSTAND
+// =====================================================================
+const KEY = 'glutfrost-save-v1';
+let hudCash = 0, hudBump = 0, prevCash = 0;
+const DEF = () => ({
+  cash: 0, iron: 0,
+  lv: { axes: 1, cap: 0, boots: 0, coat: 0, sharp: 0, furnace: 1, hunter: 0 },
+  own: { tower: 0, forest: 0, kiln: 0, coalCt: 0, mine: 0, server: 0, lumber: 0 },
+  paid: {}, grillIn: 0, grillOut: 0, kilnIn: 0, kilnOut: 0, meatCt: 0, coalCt: 0, cashPile: 0,
+  time: 0, nextBliz: 0, won: 0, sold: 0, yetiKills: 0, muted: 0, helpSeen: 0,
+});
+let S = DEF();
+function load() {
+  try {
+    const j = JSON.parse(localStorage.getItem(KEY));
+    if (j) { const d = DEF(); S = Object.assign(d, j); S.lv = Object.assign(d.lv, j.lv || {}); S.own = Object.assign(d.own, j.own || {}); S.paid = j.paid || {}; }
+  } catch (e) { }
+}
+let resetting = false;
+function save() { if (resetting) return; S.lastSeen = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }
+load();
+hudCash = prevCash = S.cash;
+
+const cap = () => 10 + 8 * S.lv.cap;
+const speed = () => 195 * (1 + 0.16 * S.lv.boots);
+const dmg = () => 1 + S.lv.sharp;
+const heatR = () => 330 + 45 * S.lv.furnace;
+const cookT = () => 0.75 / (1 + 0.35 * (S.lv.furnace - 1));
+const meatPrice = () => 1 + S.lv.furnace;
+const coalPrice = () => (2 + S.lv.furnace) * (blizzard() ? 2 : 1);
+const blizzard = () => S.own.forest && S.time >= S.nextBliz && S.time < S.nextBliz + 28;
+const blizWarn = () => S.own.forest && S.time >= S.nextBliz - 6 && S.time < S.nextBliz;
+
+// =====================================================================
+//  WELT-LAYOUT
+// =====================================================================
+const HR = 300, HH = HR * Math.sqrt(3) / 2;
+const FURN = { x: 0, y: -20, r: 46 };
+const GRILL_IN = { x: -95, y: -25 }, GRILL_OUT = { x: -95, y: 65 };
+const KILN = { x: 100, y: -112, r: 30 };
+const KILN_IN = { x: 95, y: -25 }, KILN_OUT = { x: 95, y: 65 };
+const MEAT_CT = { x: -90, y: 262, zx: -90, zy: 222 };
+const COAL_CT = { x: 90, y: 262, zx: 90, zy: 222 };
+const CASH = { x: 0, y: 205 };
+const TOWER = { x: -112, y: -192, r: 22 };
+const CONV = [[-112, -172], [-112, -70], [-98, -42]];
+const FIELD = { x0: -600, x1: 315, y0: -1000, y1: -256 };
+const FOREST = { x0: 315, x1: 1050, y0: -650, y1: 380 };
+const MINE = { x0: -1050, x1: -315, y0: -230, y1: 350 };
+
+function hexV(i) { const a = i * Math.PI / 3; return [HR * Math.cos(a), HR * Math.sin(a)]; }
+function inHexPt(x, y, R = HR) { const ax = Math.abs(x), ay = Math.abs(y); return ay <= R * 0.866 && 1.732 * ax + ay <= 1.732 * R; }
+function inRect(x, y, r) { return x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1; }
+function inRegion(x, y) {
+  if (inHexPt(x, y, HR - 4)) return true;
+  if (inRect(x, y, FIELD)) return true;
+  if (y >= -178 && y <= -82 && ((x >= 185 && x <= 320) || (x <= -185 && x >= -320))) return true;
+  if (inRect(x, y, FOREST)) return true;
+  if (inRect(x, y, MINE)) return true;
+  return false;
+}
+function zoneOf(x, y) {
+  if (inHexPt(x, y, HR - 2)) return 'camp';
+  if (y < -250 && x < 315) return 'field';
+  if (x >= 315) return 'forest';
+  if (x <= -315) return 'iron';
+  if (y > -180 && y < -80 && x > 0) return 'forest';
+  if (y > -180 && y < -80 && x < 0) return 'iron';
+  return 'camp';
+}
+
+// Zaun-Segmente  k: f=Zaun, gF=Waldtor, gI=Minentor, tM=Fleischtheke, tC=Kohletheke
+const segs = [];
+function seg(x1, y1, x2, y2, k = 'f') { segs.push({ x1, y1, x2, y2, k }); }
+function edge(i, cuts) { // cuts: [[t0,t1,kind],...] Teilstücke der Kante
+  const [ax, ay] = hexV(i), [bx, by] = hexV((i + 1) % 6);
+  for (const [t0, t1, k] of cuts) seg(lerp(ax, bx, t0), lerp(ay, by, t0), lerp(ax, bx, t1), lerp(ay, by, t1), k);
+}
+edge(0, [[0, 1, 'f']]);
+// untere Kante: von (150,260) nach (-150,260)
+edge(1, [[0, 10 / 300, 'f'], [10 / 300, 110 / 300, 'tC'], [110 / 300, 190 / 300, 'f'], [190 / 300, 290 / 300, 'tM'], [290 / 300, 1, 'f']]);
+edge(2, [[0, 1, 'f']]);
+edge(3, [[0, .35, 'f'], [.35, .65, 'gI'], [.65, 1, 'f']]);
+edge(4, [[0, .35, 'f'], [.65, 1, 'f']]); // Nordtor offen
+edge(5, [[0, .35, 'f'], [.35, .65, 'gF'], [.65, 1, 'f']]);
+// Eisfeld
+seg(-600, -258, -152, -258); seg(152, -258, 315, -258);
+seg(-600, -1000, 315, -1000); seg(-600, -1000, -600, -258);
+// Wald
+seg(315, -1000, 315, -175); seg(315, -85, 315, 380);
+seg(315, -650, 1050, -650); seg(1050, -650, 1050, 380); seg(315, 380, 1050, 380);
+seg(199, -175, 315, -175); seg(251, -85, 315, -85);
+// Mine
+seg(-315, -230, -315, -175); seg(-315, -85, -315, 350);
+seg(-1050, -230, -315, -230); seg(-1050, -230, -1050, 350); seg(-1050, 350, -315, 350);
+seg(-315, -175, -199, -175); seg(-315, -85, -251, -85);
+
+function segActive(s) {
+  if (s.k === 'gF') return !S.own.forest;
+  if (s.k === 'gI') return !S.own.mine;
+  return true;
+}
+// Zaunpfähle
+const posts = [];
+for (const s of segs) {
+  if (s.k === 'gF' || s.k === 'gI' || s.k === 'tM') continue;
+  const L = dist(s.x1, s.y1, s.x2, s.y2), n = Math.max(1, Math.round(L / 17));
+  for (let i = 0; i <= n; i++) posts.push({ x: lerp(s.x1, s.x2, i / n), y: lerp(s.y1, s.y2, i / n), s, h: rand(22, 27) });
+}
+
+// Deko: Bäume außerhalb der Zonen, Schneehügel
+const decoTrees = [], mounds = [];
+for (let i = 0; i < 420 && decoTrees.length < 170; i++) {
+  const x = rand(-1400, 1400), y = rand(-1350, 950);
+  if (inRegion(x, y) || inHexPt(x, y, HR + 90)) continue;
+  if (y > 220 && Math.abs(x) < 420) continue; // Weg der Überlebenden
+  if (x > 280 && x < 1100 && y > -700 && y < 420) continue;
+  if (x < -280 && x > -1100 && y > -280 && y < 400) continue;
+  if (y < -230 && y > -1050 && x > -650 && x < 340) continue;
+  decoTrees.push({ x, y, s: rand(.9, 1.4) });
+}
+for (let i = 0; i < 70; i++) mounds.push({ x: rand(-1300, 1300), y: rand(-1300, 900), r: rand(20, 70) });
+
+// =====================================================================
+//  ENTITÄTEN
+// =====================================================================
+const player = { x: 0, y: 120, hp: 100, warm: 100, stack: [], face: 1, anim: 0, axeA: 0, dead: 0, moving: 0, hurtT: 0 };
+let bears = [], trees = [], rocks = [], drops = [], flyers = [], conv = [], parts = [], texts = [], bolts = [], npcs = [], casts = [], shards = [];
+let yeti = null, towerT = 0, towerAim = -Math.PI / 2, grillT = 0, kilnT = 0, xferT = 0, saveT = 0, banner = null, firstMove = false;
+
+function spawnBear(b, farFromPlayer = true) {
+  let x, y, k = 0;
+  do { x = rand(FIELD.x0 + 40, FIELD.x1 - 40); y = rand(FIELD.y0 + 40, FIELD.y1 - 70); k++; }
+  while (k < 30 && farFromPlayer && dist(x, y, player.x, player.y) < 300);
+  Object.assign(b, { x, y, hp: 3, max: 3, hitCd: 0, aggro: 0, vx: 0, vy: 0, wt: rand(0, 3), dead: 0, flash: 0, anim: rand(0, 6), face: 1, big: Math.random() < .15 });
+  if (b.big) { b.hp = b.max = 6; }
+  return b;
+}
+for (let i = 0; i < 24; i++) bears.push(spawnBear({}, false));
+
+(function makeTrees() {
+  for (let x = FOREST.x0 + 60; x < FOREST.x1 - 25; x += 74)
+    for (let y = FOREST.y0 + 40; y < FOREST.y1 - 20; y += 66) {
+      const tx = x + rand(-20, 20) + ((y / 66) % 2) * 26, ty = y + rand(-16, 16);
+      if (Math.random() < .3) continue;
+      if (dist(tx, ty, 820, -150) < 190) continue;   // Lichtung des Yetis
+      if (Math.abs(ty + 130) < 50 && tx < 430) continue; // Eingang frei
+      trees.push({ x: tx, y: ty, hp: 4, max: 4, hitCd: 0, stump: 0, shake: 0, s: rand(.9, 1.2) });
+    }
+})();
+(function makeRocks() {
+  for (let i = 0; i < 400 && rocks.length < 34; i++) {
+    const x = rand(MINE.x0 + 50, MINE.x1 - 40), y = rand(MINE.y0 + 40, MINE.y1 - 30);
+    if (Math.abs(y + 130) < 50 && x > -430) continue;
+    if (rocks.some(r => dist(r.x, r.y, x, y) < 70)) continue;
+    rocks.push({ x, y, hp: 8, max: 8, hitCd: 0, stump: 0, shake: 0, s: rand(.85, 1.25), seed: Math.random() });
+  }
+})();
+
+function spawnYeti() {
+  yeti = { x: 820, y: -150, hp: 0, max: 0, hitCd: 0, flash: 0, castT: 3, anim: 0, dead: 0, face: -1, rest: 0 };
+  yeti.max = yeti.hp = 90 + 45 * S.yetiKills;
+}
+if (S.own.forest) spawnYeti();
+
+function spawnNpc(kind) {
+  npcs.push({ kind, x: rand(-40, 40), y: 130, stack: [], path: [], gx: 1e9, gy: 1e9, replan: 0, hitT: 0, anim: 0, axeA: 0, target: null, xfer: 0, face: 1 });
+}
+for (let i = 0; i < S.lv.hunter; i++) spawnNpc('hunter');
+if (S.own.server) spawnNpc('server');
+if (S.own.lumber) spawnNpc('lumber');
+
+// ---------- Überlebende / Warteschlangen ----------
+const queues = {
+  meat: { ct: MEAT_CT, key: 'meatCt', item: 'cooked', list: [], spawnT: 1, max: 4, price: meatPrice, on: () => true },
+  coal: { ct: COAL_CT, key: 'coalCt', item: 'coal', list: [], spawnT: 1, max: 4, price: coalPrice, on: () => S.own.coalCt },
+};
+const COATS = ['#3d82c4', '#4a95d1', '#2f6fa8', '#5aa0c8', '#3b78b0'];
+function queueSpot(q, i) { return [q.ct.x + (i % 2 ? 10 : -6), 300 + i * 40]; }
+
+// =====================================================================
+//  BAU-FELDER (Upgrades)
+// =====================================================================
+const PADS = [
+  { id: 'axes', x: -200, y: 110, ic: '🪓', name: () => S.lv.axes + 1 + '. Axt', cost: () => [12, 45, 150, 480][S.lv.axes - 1], vis: () => true, buy: () => S.lv.axes++ },
+  { id: 'cap', x: -200, y: -50, ic: '🎒', name: () => 'Tragkraft +8', cost: () => [15, 60, 170, 480, 1000][S.lv.cap], vis: () => true, buy: () => S.lv.cap++ },
+  { id: 'tower', x: TOWER.x, y: TOWER.y, ic: '🏹', name: () => 'Armbrustturm', cost: () => S.own.tower ? null : 30, vis: () => S.lv.axes >= 2 || S.lv.cap >= 1, buy: () => S.own.tower = 1 },
+  { id: 'forest', x: 177, y: -102, ic: '🌲', name: () => 'Wald öffnen', cost: () => S.own.forest ? null : 60, vis: () => S.own.tower, buy: () => { S.own.forest = 1; S.nextBliz = S.time + 70; spawnYeti(); } },
+  { id: 'kiln', x: KILN.x, y: KILN.y, ic: '⚒️', name: () => 'Kohlenmeiler', cost: () => S.own.kiln ? null : 40, vis: () => S.own.forest, buy: () => S.own.kiln = 1 },
+  { id: 'coalCt', x: COAL_CT.zx, y: COAL_CT.zy, ic: '🪨', name: () => 'Kohle-Theke', cost: () => S.own.coalCt ? null : 40, vis: () => S.own.kiln, buy: () => S.own.coalCt = 1 },
+  { id: 'furnace', x: 155, y: 170, ic: '🔥', name: () => 'Ofen Stufe ' + (S.lv.furnace + 1), cost: () => [90, 260, 600, 1200][S.lv.furnace - 1], vis: () => S.own.tower, buy: () => { S.lv.furnace++; if (S.lv.furnace >= 5 && !S.won) { S.won = 1; banner = { t: 7, a: '🎉 Das Lager ist gerettet!', b: 'Der Ofen brennt auf höchster Stufe. Spiel einfach weiter!' }; } } },
+  { id: 'hunter', x: -200, y: 30, ic: '🧔', name: () => 'Jäger anheuern', cost: () => [120, 420][S.lv.hunter], vis: () => S.own.tower, buy: () => { S.lv.hunter++; spawnNpc('hunter'); } },
+  { id: 'boots', x: 200, y: -50, ic: '🥾', name: () => 'Schneeschuhe', cost: () => [35, 110, 340][S.lv.boots], vis: () => S.own.tower, buy: () => S.lv.boots++ },
+  { id: 'coat', x: 200, y: 30, ic: '🧥', name: () => 'Pelzmantel', cost: () => [50, 160, 420][S.lv.coat], vis: () => S.own.forest, buy: () => S.lv.coat++ },
+  { id: 'server', x: 200, y: 110, ic: '🧑‍🍳', name: () => 'Thekenhelfer', cost: () => S.own.server ? null : 180, vis: () => S.lv.hunter >= 1, buy: () => { S.own.server = 1; spawnNpc('server'); } },
+  { id: 'lumber', x: 155, y: -170, ic: '🪚', name: () => 'Holzfäller', cost: () => S.own.lumber ? null : 220, vis: () => S.own.forest && S.own.kiln, buy: () => { S.own.lumber = 1; spawnNpc('lumber'); } },
+  { id: 'mine', x: -177, y: -102, ic: '⛏️', name: () => 'Eisenmine öffnen', cost: () => S.own.mine ? null : 200, vis: () => S.lv.furnace >= 2, buy: () => S.own.mine = 1 },
+  { id: 'sharp', x: -150, y: 170, cur: 'iron', ic: '⚔️', name: () => 'Axt schärfen', cost: () => [8, 20, 40, 80][S.lv.sharp], vis: () => S.own.mine, buy: () => S.lv.sharp++ },
+];
+const PAD_TXT = {
+  axes: ['Mehr Äxte = schnellere Treffer'],
+  cap: ['Mehr auf einmal tragen'],
+  tower: ['Schießt auf Bären – Fleisch kommt per Band', 'Der Turm jagt jetzt mit – das Fleisch rollt von selbst zum Ofen.'],
+  forest: ['Holz für Kohle – Vorsicht, Yeti!', 'Holz → Kohlenmeiler → Kohle. Im Wald lebt der Yeti!'],
+  kiln: ['Macht aus Holz Kohle', 'Leg Holz auf das rechte Feld neben dem Ofen.'],
+  coalCt: ['Überlebende kaufen Kohle', 'Kohle bringt mehr als Fleisch – im Schneesturm sogar doppelt.'],
+  furnace: ['Höhere Preise, schneller, wärmer', 'Höhere Preise, schnelleres Braten und eine größere Wärmezone.'],
+  hunter: ['Jagt Bären für dich', 'Dein Jäger bringt ab jetzt Fleisch zum Ofen.'],
+  boots: ['Schneller laufen'],
+  coat: ['Langsamer auskühlen'],
+  server: ['Füllt die Theken automatisch', 'Die Theken werden jetzt automatisch befüllt – deine Helfer verdienen sogar, während du weg bist.'],
+  lumber: ['Fällt Bäume für den Kohlenmeiler', 'Holz kommt jetzt automatisch zum Kohlenmeiler.'],
+  mine: ['Eisenerz für schärfere Äxte', 'Baue Erz ab und schärfe damit deine Äxte.'],
+  sharp: ['Mehr Schaden pro Treffer'],
+};
+for (const p of PADS) { const t = PAD_TXT[p.id]; if (t) { p.desc = t[0]; if (t[1]) p.info = () => t[1]; } }
+function padActive(p) { const c = p.cost(); return p.vis() && c != null; }
+
+// =====================================================================
+//  EINGABE
+// =====================================================================
+const joy = { on: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
+const keys = {};
+addEventListener('keydown', e => { keys[e.key.toLowerCase()] = 1; if (e.key === 'Escape') toggleMenu(); });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = 0; });
+cv.addEventListener('pointerdown', e => {
+  if (joy.on) return;
+  joy.on = true; joy.id = e.pointerId; joy.ox = joy.x = e.clientX; joy.oy = joy.y = e.clientY;
+  try { cv.setPointerCapture(e.pointerId); } catch (_) { }
+  if (AC && AC.state === 'suspended') AC.resume();
+});
+cv.addEventListener('pointermove', e => { if (joy.on && e.pointerId === joy.id) { joy.x = e.clientX; joy.y = e.clientY; } });
+const endJoy = e => { if (e.pointerId === joy.id) { joy.on = false; joy.id = null; } };
+addEventListener('blur', () => { joy.on = false; for (const k in keys) keys[k] = 0; });
+cv.addEventListener('pointerup', endJoy); cv.addEventListener('pointercancel', endJoy);
+function inputVec() {
+  let x = 0, y = 0;
+  if (keys['a'] || keys['arrowleft']) x -= 1; if (keys['d'] || keys['arrowright']) x += 1;
+  if (keys['w'] || keys['arrowup']) y -= 1; if (keys['s'] || keys['arrowdown']) y += 1;
+  if (x || y) { const l = Math.hypot(x, y); return [x / l, y / l]; }
+  if (joy.on) {
+    const dx = joy.x - joy.ox, dy = joy.y - joy.oy, l = Math.hypot(dx, dy), R = 55;
+    if (l < 6) return [0, 0];
+    const m = Math.min(1, l / R); return [dx / l * m, dy / l * m];
+  }
+  return [0, 0];
+}
+
+// =====================================================================
+//  EFFEKTE
+// =====================================================================
+function fly(type, x0, y0, z0, tx, ty, tz, dur, cb) { flyers.push({ type, x0, y0, z0, tx, ty, tz, t: 0, dur, cb }); }
+function burst(x, y, z, col, n, sp = 140, size = 4) {
+  for (let i = 0; i < n; i++) parts.push({ x, y, z, vx: rand(-sp, sp), vy: rand(-sp, sp) * .7, vz: rand(60, 260), life: rand(.4, .8), max: .8, col, size: rand(size * .6, size * 1.3) });
+}
+function ftext(x, y, z, s, col = '#fff', size = 18) { texts.push({ x, y, z, s, col, size, life: 1.1 }); }
+function spawnDrops(type, n, x, y, v = 1) {
+  for (let i = 0; i < n; i++) drops.push({ type, v, x, y, z: 18, vx: rand(-110, 110), vy: rand(-100, 100), vz: rand(160, 260), age: 0 });
+}
+
+// =====================================================================
+//  KAMPF
+// =====================================================================
+function killBear(b, src, npc) {
+  b.dead = rand(3, 6);
+  const n = b.big ? randi(5, 6) : randi(2, 3);
+  burst(b.x, b.y, 18, '#d8344a', 12, 160, 4);
+  burst(b.x, b.y, 18, '#ffffff', 8, 120, 5);
+  if (src === 'tower') { for (let i = 0; i < n; i++) fly('raw', b.x, b.y, 20, TOWER.x, TOWER.y + 18, 20, .55 + i * .08, () => conv.push({ d: 0 })); }
+  else if (src === 'npc') { for (let i = 0; i < n; i++) npc.stack.push('raw'); }
+  else spawnDrops('raw', n, b.x, b.y);
+}
+function hurt(o, amount, kind, src, npc) {
+  o.hp -= amount; o.flash = .12; o.shake = .25;
+  if (kind === 'bear') {
+    o.aggro = 5; snd('hit'); burst(o.x, o.y, 22, '#e2414f', 4, 90, 3);
+    if (o.hp <= 0) killBear(o, src, npc);
+  } else if (kind === 'tree') {
+    snd('chop'); burst(o.x, o.y, 30, '#c9935c', 5, 90, 3); burst(o.x, o.y, 50, '#ffffff', 4, 70, 3);
+    if (o.hp <= 0) {
+      o.stump = 28; burst(o.x, o.y, 40, '#7fb0d6', 10, 140, 5);
+      if (src === 'npc') { for (let i = 0; i < 3; i++) npc.stack.push('wood'); } else spawnDrops('wood', 3, o.x, o.y);
+    }
+  } else if (kind === 'rock') {
+    snd('hit'); burst(o.x, o.y, 20, '#c7cdd3', 5, 110, 3); burst(o.x, o.y, 20, '#ffb347', 2, 110, 2);
+    if (o.hp <= 0) { o.stump = 40; spawnDrops('iron', 2 + (Math.random() < .4 ? 1 : 0), o.x, o.y); burst(o.x, o.y, 20, '#9aa4ae', 12, 150, 5); }
+  } else if (kind === 'yeti') {
+    snd('hit'); burst(o.x, o.y, 50, '#b47cff', 5, 140, 4);
+    if (o.hp <= 0) {
+      o.dead = 75; S.yetiKills++; snd('boom'); shake = 14; buzz([60, 40, 90]);
+      spawnDrops('raw', 12, o.x, o.y); spawnDrops('cash', 12, o.x, o.y, 6 + 4 * S.lv.furnace);
+      if (S.own.mine) spawnDrops('iron', 8, o.x, o.y);
+      burst(o.x, o.y, 50, '#b47cff', 30, 260, 6); burst(o.x, o.y, 40, '#ffffff', 20, 220, 6);
+      banner = { t: 3.5, a: 'Yeti besiegt!', b: 'Er kehrt stärker zurück …' };
+    }
+  }
+}
+const ORB = 58;
+// Äxte treffen alles im Kreis um den Träger. Mehr Äxte => schnellere Treffer.
+function swing(owner, nAxes, damage, src, npc, dt) {
+  const reach = ORB + 6, cd = 0.42 / nAxes;
+  const near = (o, r) => Math.abs(o.x - owner.x) < reach + r && Math.abs(o.y - owner.y) < reach + r && dist(o.x, o.y, owner.x, owner.y) < reach + r;
+  let hitSomething = false;
+  const z = zoneOf(owner.x, owner.y);
+  if (z === 'field' || z === 'camp') for (const b of bears) {
+    if (b.dead) continue; b.hitCd -= dt;
+    if (b.hitCd <= 0 && near(b, b.big ? 30 : 22)) { b.hitCd = cd; hurt(b, damage, 'bear', src, npc); hitSomething = true; }
+  }
+  if (z === 'forest') {
+    for (const t of trees) {
+      if (t.stump) continue; t.hitCd -= dt;
+      if (t.hitCd <= 0 && near(t, 16)) { t.hitCd = cd; hurt(t, damage, 'tree', src, npc); hitSomething = true; }
+    }
+    if (yeti && !yeti.dead && src === 'player') { yeti.hitCd -= dt; if (yeti.hitCd <= 0 && near(yeti, 38)) { yeti.hitCd = cd; hurt(yeti, damage, 'yeti', src); hitSomething = true; } }
+  }
+  if (z === 'iron') for (const r of rocks) {
+    if (r.stump) continue; r.hitCd -= dt;
+    if (r.hitCd <= 0 && near(r, 22)) { r.hitCd = cd; hurt(r, damage, 'rock', src, npc); hitSomething = true; }
+  }
+  return hitSomething;
+}
+
+// =====================================================================
+//  BEWEGUNG / KOLLISION
+// =====================================================================
+function solids() {
+  const a = [FURN];
+  if (S.own.kiln) a.push(KILN);
+  if (S.own.tower) a.push(TOWER);
+  if (yeti && !yeti.dead) a.push({ x: yeti.x, y: yeti.y, r: 30 });
+  return a;
+}
+function moveCircle(e, dx, dy, r) {
+  const nx = e.x + dx; if (inRegion(nx, e.y)) e.x = nx;
+  const ny = e.y + dy; if (inRegion(e.x, ny)) e.y = ny;
+  for (let it = 0; it < 2; it++) {
+    for (const s of segs) {
+      if (!segActive(s)) continue;
+      const vx = s.x2 - s.x1, vy = s.y2 - s.y1, L2 = vx * vx + vy * vy;
+      const t = clamp(((e.x - s.x1) * vx + (e.y - s.y1) * vy) / L2, 0, 1);
+      const px = s.x1 + vx * t, py = s.y1 + vy * t, d = dist(e.x, e.y, px, py);
+      if (d < r && d > 0.0001) { const k = (r - d) / d; const nx2 = e.x + (e.x - px) * k, ny2 = e.y + (e.y - py) * k; if (inRegion(nx2, ny2)) { e.x = nx2; e.y = ny2; } }
+    }
+    for (const c of solids()) {
+      const d = dist(e.x, e.y, c.x, c.y), m = c.r + r;
+      if (d < m && d > 0.0001) { const nx2 = c.x + (e.x - c.x) / d * m, ny2 = c.y + (e.y - c.y) / d * m; if (inRegion(nx2, ny2)) { e.x = nx2; e.y = ny2; } }
+    }
+  }
+}
+
+// Wegpunkte für Helfer
+const WP = { field: [[0, -195], [0, -300]], forest: [[150, -92], [262, -130], [370, -130]], iron: [[-150, -92], [-262, -130], [-370, -130]] };
+function route(a, b) {
+  if (a === b) return [];
+  let p = [];
+  if (a !== 'camp') p = p.concat(WP[a].slice().reverse());
+  if (b !== 'camp') p = p.concat(WP[b]);
+  return p;
+}
+function npcGo(n, tx, ty, sp, dt) {
+  n.replan -= dt;
+  if ((!n.path.length && dist(n.x, n.y, tx, ty) > 12) || dist(tx, ty, n.gx, n.gy) > 60) {
+    n.path = route(zoneOf(n.x, n.y), zoneOf(tx, ty)).concat([[tx, ty]]); n.gx = tx; n.gy = ty; n.replan = .6;
+  } else if (n.path.length) n.path[n.path.length - 1] = [tx, ty];
+  if (!n.path.length) return true;
+  const [px, py] = n.path[0], d = dist(n.x, n.y, px, py);
+  if (d < 10) { n.path.shift(); return n.path.length === 0; }
+  const s = Math.min(d, sp * dt);
+  n.x += (px - n.x) / d * s; n.y += (py - n.y) / d * s; n.anim += dt * 10; n.face = px > n.x ? 1 : -1;
+  return false;
+}
+
+// =====================================================================
+//  UPDATE
+// =====================================================================
+function update(dt) {
+  S.time += dt;
+  shake = Math.max(0, shake - dt * 40);
+  hudCash = lerp(hudCash, S.cash, Math.min(1, dt * 10)); if (Math.abs(hudCash - S.cash) < .5) hudCash = S.cash;
+  hudBump = Math.max(0, hudBump - dt * 4);
+  const t = S.time;
+
+  // ---------- Spieler ----------
+  if (player.dead > 0) {
+    player.dead -= dt;
+    if (player.dead <= 0) { player.x = 0; player.y = 120; player.hp = 100; player.warm = 100; }
+  } else {
+    const [ix, iy] = inputVec();
+    const cold = player.warm <= 0 ? .6 : 1;
+    const sp = speed() * cold;
+    player.moving = Math.hypot(ix, iy) > .05;
+    if (player.moving) { firstMove = true; player.anim += dt * 12; if (Math.abs(ix) > .1) player.face = ix > 0 ? 1 : -1; }
+    moveCircle(player, ix * sp * dt, iy * sp * dt, 14);
+    player.axeA += dt * (4 + S.lv.axes * .6);
+    swing(player, S.lv.axes, dmg(), 'player', null, dt);
+
+    // Wärme & Leben
+    const dF = dist(player.x, player.y, FURN.x, FURN.y);
+    const inCamp = inHexPt(player.x, player.y, HR);
+    if (dF < heatR() || inCamp) player.warm = Math.min(100, player.warm + 22 * dt);
+    else player.warm = Math.max(0, player.warm - (blizzard() ? 7 : 2.2) * (1 - .22 * S.lv.coat) * dt);
+    if (player.warm <= 0) { player.hp -= 6 * dt; if (Math.random() < dt * 2) ftext(player.x, player.y, 70, 'Kalt!', '#9fd8ff', 16); }
+    if (inCamp) player.hp = Math.min(100, player.hp + 14 * dt);
+    player.hurtT -= dt;
+    if (player.hp <= 0) {
+      player.dead = 2.2; burst(player.x, player.y, 30, '#9fd8ff', 24, 200, 5);
+      for (const it of player.stack) drops.push({ type: it, v: 1, x: player.x, y: player.y, z: 30, vx: rand(-120, 120), vy: rand(-120, 120), vz: rand(100, 250), age: -1 });
+      player.stack.length = 0; banner = { t: 2.5, a: 'Erfroren …', b: 'Zurück zum Ofen. Achte auf die Wärme!' };
+    }
+
+    // Transfers an Stationen
+    xferT -= dt;
+    if (xferT <= 0) {
+      if (doTransfers()) xferT = .055;
+    }
+    // Bau-Felder
+    for (const p of PADS) {
+      const on = dist(player.x, player.y, p.x, p.y) < 32;
+      if (!on) { p.lock = false; p.onT = 0; continue; }
+      p.onT = (p.onT || 0) + dt;
+      if (padActive(p) && !p.lock && p.onT > .3) payPad(p, dt);
+    }
+  }
+
+  // ---------- Stationen ----------
+  grillT += dt;
+  if (S.grillIn > 0 && S.grillOut < 120 && grillT >= cookT()) { grillT = 0; S.grillIn--; S.grillOut++; burst(FURN.x - 40, FURN.y, 50, '#ffb12b', 2, 40, 2); }
+  if (S.own.kiln) { kilnT += dt; if (S.kilnIn > 0 && S.kilnOut < 120 && kilnT >= cookT() * 1.5) { kilnT = 0; S.kilnIn--; S.kilnOut++; } }
+
+  // ---------- Turm ----------
+  if (S.own.tower) {
+    towerT -= dt;
+    let best = null, bd = 330;
+    for (const b of bears) { if (b.dead) continue; const d = dist(b.x, b.y, TOWER.x, TOWER.y); if (d < bd) { bd = d; best = b; } }
+    if (best) towerAim = Math.atan2(best.y - TOWER.y, best.x - TOWER.x);
+    if (towerT <= 0 && best) {
+      towerT = Math.max(.6, 1.4 - .15 * (S.lv.furnace - 1));
+      bolts.push({ x: TOWER.x, y: TOWER.y, z: 52, tgt: best, sp: 650 });
+    }
+  }
+  for (let i = bolts.length - 1; i >= 0; i--) {
+    const b = bolts[i], g = b.tgt;
+    if (g.dead) { bolts.splice(i, 1); continue; }
+    const d = dist(b.x, b.y, g.x, g.y);
+    if (d < 14) { bolts.splice(i, 1); g.aggro = 0; hurt(g, 2, 'bear', 'tower'); g.aggro = 0; continue; }
+    b.x += (g.x - b.x) / d * b.sp * dt; b.y += (g.y - b.y) / d * b.sp * dt; b.z = lerp(b.z, 20, dt * 4);
+  }
+  // Förderband
+  const convLen = dist(...CONV[0], ...CONV[1]) + dist(...CONV[1], ...CONV[2]);
+  for (let i = conv.length - 1; i >= 0; i--) { conv[i].d += 85 * dt; if (conv[i].d >= convLen) { conv.splice(i, 1); S.grillIn++; } }
+
+  // ---------- Bären ----------
+  const pInField = zoneOf(player.x, player.y) === 'field' && !player.dead;
+  for (const b of bears) {
+    if (b.flash > 0) b.flash -= dt;
+    if (b.dead) { b.dead -= dt; if (b.dead <= 0) spawnBear(b); continue; }
+    b.aggro -= dt;
+    let sp = 0;
+    if (b.aggro > 0 && b.big && pInField) {
+      const d = dist(b.x, b.y, player.x, player.y);
+      if (d > 30) { b.vx = (player.x - b.x) / d; b.vy = (player.y - b.y) / d; sp = 95; }
+      else { sp = 0; if (player.hurtT <= 0) { hurtPlayer(5); player.hurtT = 1; } }
+    } else {
+      b.wt -= dt;
+      if (b.wt <= 0) { b.wt = rand(1.5, 4); const a = rand(0, TAU); const m = Math.random() < .4 ? 0 : 1; b.vx = Math.cos(a) * m; b.vy = Math.sin(a) * m; }
+      sp = 28;
+    }
+    b.x = clamp(b.x + b.vx * sp * dt, FIELD.x0 + 25, FIELD.x1 - 25);
+    b.y = clamp(b.y + b.vy * sp * dt, FIELD.y0 + 25, FIELD.y1 - 35);
+    if (sp > 0 && (b.vx || b.vy)) { b.anim += dt * sp / 9; if (Math.abs(b.vx) > .1) b.face = b.vx > 0 ? 1 : -1; }
+  }
+  // ---------- Bäume & Felsen ----------
+  for (const tr of trees) { if (tr.shake > 0) tr.shake -= dt; if (tr.stump > 0) { tr.stump -= dt; if (tr.stump <= 0) { tr.stump = 0; tr.hp = tr.max; } } }
+  for (const r of rocks) { if (r.shake > 0) r.shake -= dt; if (r.stump > 0) { r.stump -= dt; if (r.stump <= 0) { r.stump = 0; r.hp = r.max; } } }
+
+  // ---------- Yeti ----------
+  if (yeti) updateYeti(dt);
+  for (let i = casts.length - 1; i >= 0; i--) {
+    const c = casts[i]; c.t -= dt;
+    if (c.t <= 0) {
+      casts.splice(i, 1); snd('boom');
+      for (let k = 0; k < 9; k++) { const a = rand(0, TAU), rr2 = rand(0, c.r * .8); shards.push({ x: c.x + Math.cos(a) * rr2, y: c.y + Math.sin(a) * rr2, h: rand(20, 46), life: 1.1, rot: rand(-.4, .4) }); }
+      burst(c.x, c.y, 10, '#b47cff', 18, 200, 5);
+      if (!player.dead && dist(player.x, player.y, c.x, c.y) < c.r) hurtPlayer(22, true);
+      if (dist(player.x, player.y, c.x, c.y) < 400) shake = Math.max(shake, 7);
+    }
+  }
+  for (let i = shards.length - 1; i >= 0; i--) { shards[i].life -= dt; if (shards[i].life <= 0) shards.splice(i, 1); }
+
+  // ---------- Helfer ----------
+  for (const n of npcs) updateNpc(n, dt);
+
+  // ---------- Überlebende ----------
+  for (const k in queues) updateQueue(queues[k], dt);
+
+  // ---------- Drops ----------
+  for (let i = drops.length - 1; i >= 0; i--) {
+    const d = drops[i]; d.age += dt;
+    if (d.z > 0 || d.vz > 0) { d.vz -= 700 * dt; d.z += d.vz * dt; d.x += d.vx * dt; d.y += d.vy * dt; if (d.z <= 0) { d.z = 0; d.vz = 0; d.vx = d.vy = 0; } }
+    if (d.age > 70) { drops.splice(i, 1); continue; }
+    if (player.dead || d.age < .45) continue;
+    const isCur = d.type === 'cash' || d.type === 'iron';
+    if (!isCur && player.stack.length >= cap()) { if (S.time - (player.fullMsg || 0) > 2.5 && dist(d.x, d.y, player.x, player.y) < 90) { player.fullMsg = S.time; ftext(player.x, player.y, 90, 'Voll!', '#ffb35c', 18); } continue; }
+    const dd = dist(d.x, d.y, player.x, player.y);
+    if (dd < 95) {
+      const s = Math.min(dd, (420 + (95 - dd) * 6) * dt);
+      d.x += (player.x - d.x) / (dd || 1) * s; d.y += (player.y - d.y) / (dd || 1) * s; d.z = lerp(d.z, 25, dt * 8);
+      if (dd < 16) {
+        drops.splice(i, 1);
+        if (d.type === 'cash') { S.cash += d.v; snd('coin'); }
+        else if (d.type === 'iron') { S.iron += 1; snd('pick'); ftext(player.x, player.y, 60, '+1 Eisen', '#dfe6ec', 15); }
+        else { player.stack.push(d.type); snd('pick'); }
+      }
+    }
+  }
+  // ---------- Flieger / Partikel ----------
+  for (let i = flyers.length - 1; i >= 0; i--) { const f = flyers[i]; f.t += dt; if (f.t >= f.dur) { flyers.splice(i, 1); f.cb && f.cb(); } }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.life -= dt; if (p.life <= 0) { parts.splice(i, 1); continue; }
+    p.vz -= 600 * dt; p.z += p.vz * dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.z < 0) { p.z = 0; p.vz *= -.3; p.vx *= .5; p.vy *= .5; }
+  }
+  for (let i = texts.length - 1; i >= 0; i--) { texts[i].life -= dt; texts[i].z += 40 * dt; if (texts[i].life <= 0) texts.splice(i, 1); }
+
+  // ---------- Schneesturm ----------
+  if (S.own.forest && S.time >= S.nextBliz + 28) S.nextBliz += 150;
+  if (blizWarn() && !banner && S.time - (S._warned || 0) > 20) { S._warned = S.time; snd('warn'); banner = { t: 4, a: '❄️ Schneesturm zieht auf!', b: 'Draußen wird es eiskalt – Kohle zahlt jetzt doppelt.' }; }
+  if (banner) { banner.t -= dt; if (banner.t <= 0) banner = null; }
+
+  // ---------- Kamera ----------
+  const ty = player.y - 70 / TY;
+  camX = lerp(camX, player.x, Math.min(1, dt * 6));
+  camY = lerp(camY, ty, Math.min(1, dt * 6));
+
+  saveT -= dt; if (saveT <= 0) { saveT = 4; save(); }
+}
+
+function take(stack, type) { for (let i = stack.length - 1; i >= 0; i--) if (stack[i] === type) { stack.splice(i, 1); return true; } return false; }
+function buzz(p) { if (!S.muted && navigator.vibrate) try { navigator.vibrate(p); } catch (e) { } }
+function hurtPlayer(n, txt) {
+  if (player.dead > 0) return;
+  player.hp -= n; player.hurtT = Math.max(player.hurtT, .8); snd('hurt'); buzz(35);
+  shake = Math.max(shake, 6 + n * .25); burst(player.x, player.y, 30, '#ff6060', 6, 90, 3);
+  if (txt) ftext(player.x, player.y, 70, '-' + n, '#ff7777', 20);
+}
+const near = (p, r = 36) => dist(player.x, player.y, p.x, p.y) < r;
+function stackTopZ(n) { return 34 + n * 5; }
+
+function doTransfers() {
+  const st = player.stack, n = st.length, full = n >= cap();
+  const give = (type, p, onArrive) => {
+    if (!take(st, type)) return false;
+    fly(type, player.x, player.y - 6, stackTopZ(n), p.x, p.y, 12, .28, onArrive); snd('drop'); return true;
+  };
+  if (near(GRILL_IN) && give('raw', GRILL_IN, () => S.grillIn++)) return true;
+  if (near(GRILL_OUT) && !full && S.grillOut > 0) { S.grillOut--; st.push('cooked'); snd('pick'); return true; }
+  if (near({ x: MEAT_CT.zx, y: MEAT_CT.zy }, 42) && S.meatCt < 60 && give('cooked', MEAT_CT, () => S.meatCt++)) return true;
+  if (S.own.kiln) {
+    if (near(KILN_IN) && give('wood', KILN_IN, () => S.kilnIn++)) return true;
+    if (near(KILN_OUT) && !full && S.kilnOut > 0) { S.kilnOut--; st.push('coal'); snd('pick'); return true; }
+  }
+  if (S.own.coalCt && near({ x: COAL_CT.zx, y: COAL_CT.zy }, 42) && S.coalCt < 60 && give('coal', COAL_CT, () => S.coalCt++)) return true;
+  if (near(CASH, 46) && S.cashPile > 0) {
+    const k = Math.max(1, Math.ceil(S.cashPile / 12)); S.cashPile -= k; S.cash += k; snd('coin');
+    fly('cash', CASH.x, CASH.y, 10, player.x, player.y, 40, .25);
+    return true;
+  }
+  return false;
+}
+function payPad(p, dt) {
+  const cost = p.cost(), cur = p.cur || 'cash';
+  const paid = S.paid[p.id] || 0, rem = cost - paid;
+  if (rem <= 0) return;
+  p.acc = (p.acc || 0) + dt;
+  if (p.acc < .045) return; p.acc = 0;
+  const have = cur === 'iron' ? S.iron : S.cash;
+  if (have <= 0) return;
+  const k = Math.min(have, rem, Math.max(1, Math.ceil(cost / 35)));
+  if (cur === 'iron') S.iron -= k; else S.cash -= k;
+  S.paid[p.id] = paid + k;
+  fly(cur === 'iron' ? 'iron' : 'cash', player.x, player.y, 40, p.x, p.y, 4, .22);
+  snd('coin');
+  if (S.paid[p.id] >= cost) {
+    S.paid[p.id] = 0; const nm = p.name(); p.buy(); snd('buy'); shake = Math.max(shake, 5); buzz([25, 40, 25]);
+    if (p.info && !banner) { const inf = p.info(); if (inf) banner = { t: 4.5, a: nm + ' ✔', b: inf }; } for (const q of PADS) if (dist(q.x, q.y, p.x, p.y) < 5) q.lock = true;
+    burst(p.x, p.y, 10, '#ffe066', 26, 220, 5); burst(p.x, p.y, 10, '#5ee67a', 16, 200, 5);
+    ftext(p.x, p.y, 60, nm + ' ✔', '#7cff9a', 20);
+    save();
+  }
+}
+
+function updateYeti(dt) {
+  const y = yeti;
+  if (y.flash > 0) y.flash -= dt;
+  if (y.dead) { y.dead -= dt; if (y.dead <= 0) spawnYeti(); return; }
+  const pz = zoneOf(player.x, player.y) === 'forest' && !player.dead;
+  const d = dist(y.x, y.y, player.x, player.y);
+  let tx = 820, ty = -150, sp = 55;
+  if (pz && d < 430) { tx = player.x; ty = player.y; sp = 62; }
+  const dd = dist(y.x, y.y, tx, ty);
+  if (y.rest > 0) y.rest -= dt;
+  else if (dd > 42) { y.x += (tx - y.x) / dd * sp * dt; y.y += (ty - y.y) / dd * sp * dt; y.anim += dt * 5; y.face = tx > y.x ? 1 : -1; }
+  y.x = clamp(y.x, FOREST.x0 + 60, FOREST.x1 - 40); y.y = clamp(y.y, FOREST.y0 + 40, FOREST.y1 - 30);
+  if (pz && d < 430) {
+    y.castT -= dt;
+    if (y.castT <= 0) { y.castT = Math.max(2.6, 3.8 - S.yetiKills * .25); y.rest = 1.6; casts.push({ x: player.x, y: player.y, r: 85, t: 1.25, T: 1.25 }); }
+    if (d < 48 && player.hurtT <= 0) { hurtPlayer(8); player.hurtT = 1; }
+  }
+}
+
+function updateNpc(n, dt) {
+  n.axeA += dt * 5; n.xfer -= dt;
+  const SP = 150;
+  if (n.kind === 'hunter' || n.kind === 'lumber') {
+    const isH = n.kind === 'hunter', dest = isH ? GRILL_IN : KILN_IN, item = isH ? 'raw' : 'wood';
+    if (!isH && !S.own.kiln) return;
+    const capN = 8;
+    if (n.stack.length >= capN || (n.mode === 'return' && n.stack.length > 0)) {
+      n.mode = 'return';
+      if (npcGo(n, dest.x + rand(-2, 2), dest.y, SP, dt) || dist(n.x, n.y, dest.x, dest.y) < 24) {
+        if (n.xfer <= 0 && n.stack.length) {
+          n.xfer = .08; const z = 30 + n.stack.length * 5; n.stack.pop();
+          fly(item, n.x, n.y, z, dest.x, dest.y, 12, .25, isH ? () => S.grillIn++ : () => S.kilnIn++);
+        }
+      }
+      if (!n.stack.length) n.mode = 'hunt';
+      return;
+    }
+    n.mode = 'hunt';
+    // Ziel suchen
+    const pool = isH ? bears : trees;
+    if (!n.target || (isH ? n.target.dead : n.target.stump)) {
+      let best = null, bd = 1e9;
+      for (const o of pool) {
+        if (isH ? o.dead : o.stump) continue;
+        if (npcs.some(m => m !== n && m.target === o)) continue;
+        const d = dist(o.x, o.y, n.x, n.y) + (isH ? 0 : Math.abs(o.y + 130) * .5);
+        if (d < bd) { bd = d; best = o; }
+      }
+      n.target = best;
+    }
+    const g = n.target; if (!g) return;
+    const d = dist(n.x, n.y, g.x, g.y);
+    if (d > 40) npcGo(n, g.x, g.y + (isH ? 0 : 20), SP, dt);
+    else {
+      n.hitT -= dt;
+      if (n.hitT <= 0) { n.hitT = .5; hurt(g, 1, isH ? 'bear' : 'tree', 'npc', n); if (isH) g.aggro = 0; }
+    }
+    return;
+  }
+  // Thekenhelfer: holt bis zu 10 Stück ab und bringt sie zur passenden Theke
+  if (n.kind === 'server') {
+    if (n.mode === 'deliver') {
+      if (!n.stack.length) { n.mode = 'fill'; n.src = null; return; }
+      const it = n.stack[n.stack.length - 1], ct = it === 'cooked' ? MEAT_CT : COAL_CT, key = it === 'cooked' ? 'meatCt' : 'coalCt';
+      if (npcGo(n, ct.zx, ct.zy + 4, SP, dt) || dist(n.x, n.y, ct.zx, ct.zy) < 20) {
+        if (n.xfer <= 0 && S[key] < 60) { n.xfer = .08; const z = 30 + n.stack.length * 5; n.stack.pop(); fly(it, n.x, n.y, z, ct.x, ct.y, 24, .25, () => S[key]++); }
+      }
+      return;
+    }
+    if (!n.src) {
+      const needM = S.meatCt < 25 && S.grillOut > 0, needC = S.own.coalCt && S.coalCt < 25 && S.kilnOut > 0;
+      if (needM && (!needC || S.meatCt <= S.coalCt)) n.src = 'm'; else if (needC) n.src = 'c';
+    }
+    if (!n.src) { if (n.stack.length) n.mode = 'deliver'; else npcGo(n, 0, 150, SP * .6, dt); return; }
+    const p = n.src === 'm' ? GRILL_OUT : KILN_OUT, key = n.src === 'm' ? 'grillOut' : 'kilnOut';
+    if (npcGo(n, p.x, p.y + 6, SP, dt) || dist(n.x, n.y, p.x, p.y) < 20) {
+      if (n.xfer <= 0) {
+        n.xfer = .07;
+        if (S[key] > 0 && n.stack.length < 10) { S[key]--; n.stack.push(n.src === 'm' ? 'cooked' : 'coal'); }
+        else { n.mode = 'deliver'; n.src = null; }
+      }
+    }
+  }
+}
+
+function updateQueue(q, dt) {
+  if (!q.on()) return;
+  q.spawnT -= dt;
+  if (q.spawnT <= 0 && q.list.length < q.max) {
+    q.spawnT = rand(1.6, 3.2) / (blizzard() && q.key === 'coalCt' ? 2 : 1);
+    q.list.push({ x: q.ct.x + rand(-260, 260), y: 760, want: randi(2, 3 + S.lv.furnace), got: 0, state: 'come', col: COATS[randi(0, COATS.length - 1)], anim: 0, takeT: 0, face: 1, pay: 0 });
+  }
+  for (let i = q.list.length - 1; i >= 0; i--) {
+    const s = q.list[i];
+    let tx, ty;
+    if (s.state === 'leave') { tx = s.lx; ty = 820; }
+    else { const idx = q.list.filter(o => o.state !== 'leave').indexOf(s);[tx, ty] = queueSpot(q, idx); }
+    const d = dist(s.x, s.y, tx, ty);
+    if (d > 3) { const sp = s.state === 'leave' ? 120 : 110; const k = Math.min(d, sp * dt); s.x += (tx - s.x) / d * k; s.y += (ty - s.y) / d * k; s.anim += dt * 10; s.face = tx >= s.x ? 1 : -1; }
+    if (s.state === 'leave' && s.y > 800) { q.list.splice(i, 1); continue; }
+    if (s.state !== 'leave') {
+      const idx = q.list.filter(o => o.state !== 'leave').indexOf(s);
+      if (idx === 0 && d < 6) {
+        s.takeT -= dt;
+        if (s.takeT <= 0 && S[q.key] > 0 && s.got < s.want) {
+          s.takeT = .2; S[q.key]--; s.got++;
+          fly(q.item, q.ct.x + rand(-20, 20), q.ct.y, 26, s.x, s.y, 30, .2);
+        }
+        if (s.got >= s.want) {
+          const amount = s.want * q.price();
+          s.state = 'leave'; s.lx = s.x + (Math.random() < .5 ? -1 : 1) * rand(200, 420);
+          S.sold += s.want;
+          const bills = Math.min(8, amount);
+          for (let b = 0; b < bills; b++) {
+            const last = b === bills - 1, val = last ? amount - Math.floor(amount / bills) * (bills - 1) : Math.floor(amount / bills);
+            fly('cash', s.x, s.y, 40, CASH.x + rand(-14, 14), CASH.y + rand(-8, 8), 10, .45 + b * .06, () => { S.cashPile += val; });
+          }
+          ftext(s.x, s.y, 80, '+' + amount + ' $', '#7cff9a', 18); snd('coin');
+        }
+      }
+    }
+  }
+}
+
+// =====================================================================
+//  ZIEL-HINWEIS (grüner Pfeil)
+// =====================================================================
+function hint() {
+  const st = player.stack;
+  if (player.dead > 0) return null;
+  if (player.warm < 30 && !inHexPt(player.x, player.y, HR)) return { x: FURN.x, y: FURN.y + 60, t: 'Dir ist kalt! Zurück zum Ofen 🔥' };
+  if (st.includes('raw')) return { ...GRILL_IN, t: 'Bring das rohe Fleisch zum Ofen' };
+  if (st.includes('cooked')) return { x: MEAT_CT.zx, y: MEAT_CT.zy, t: 'Bediene die Überlebenden an der Theke' };
+  if (st.includes('wood') && S.own.kiln) return { ...KILN_IN, t: 'Bring das Holz zum Kohlenmeiler' };
+  if (st.includes('coal') && S.own.coalCt) return { x: COAL_CT.zx, y: COAL_CT.zy, t: 'Bring die Kohle zur Kohle-Theke' };
+  let best = null;
+  for (const p of PADS) {
+    if (!padActive(p)) continue;
+    const rem = p.cost() - (S.paid[p.id] || 0), have = (p.cur === 'iron' ? S.iron : S.cash + S.cashPile);
+    if (have >= rem && (!best || rem < best.rem)) best = { p, rem };
+  }
+  if (S.cashPile > 0 && (best || S.cashPile >= 10 || S.cash < 5)) return { ...CASH, t: 'Sammle dein Geld ein' };
+  if (best) return { x: best.p.x, y: best.p.y, t: 'Kaufen: ' + best.p.name() };
+  if (S.cashPile > 0) return { ...CASH, t: 'Sammle dein Geld ein' };
+  const wantM = queues.meat.list.some(s => s.state !== 'leave') && S.meatCt < 6;
+  if (S.grillOut > 0 && wantM) return { ...GRILL_OUT, t: 'Hol das gebratene Fleisch ab' };
+  if (S.own.coalCt && S.kilnOut > 0 && S.coalCt < 6 && !npcs.some(n => n.kind === 'server')) return { ...KILN_OUT, t: 'Hol die Kohle ab' };
+  if (S.own.kiln && !S.own.lumber && S.kilnIn + S.kilnOut < 4 && st.length === 0) {
+    let bt = null, bd = 1e9; for (const tr of trees) { if (tr.stump) continue; const d = dist(tr.x, tr.y, player.x, player.y); if (d < bd) { bd = d; bt = tr; } }
+    if (bt) return { x: bt.x, y: bt.y, t: 'Fälle Bäume im Wald 🌲' };
+  }
+  const sp = PADS.find(p => p.id === 'sharp');
+  if (S.own.mine && st.length === 0 && padActive(sp) && S.iron < sp.cost() - (S.paid.sharp || 0) && S.lv.hunter >= 1) {
+    let br = null, bd2 = 1e9; for (const r of rocks) { if (r.stump) continue; const d = dist(r.x, r.y, player.x, player.y); if (d < bd2) { bd2 = d; br = r; } }
+    if (br) return { x: br.x, y: br.y, t: 'Baue Eisenerz in der Mine ab ⛏️', soft: 1 };
+  }
+  let bb = null, bd = 1e9; for (const b of bears) { if (b.dead) continue; const d = dist(b.x, b.y, player.x, player.y); if (d < bd) { bd = d; bb = b; } }
+  if (bb) return { x: bb.x, y: bb.y, t: 'Jage Eisbären im Norden 🐻‍❄️', soft: 1 };
+  return null;
+}
+
+// =====================================================================
+//  ZEICHNEN – Objekte
+// =====================================================================
+const ITC = {
+  raw: ['#f08a8f', '#d24f5d', '#fde0e0'], cooked: ['#bb6a3c', '#86421f', '#e8a874'], wood: ['#c27f45', '#8c5428', '#efc08a'],
+  coal: ['#4a4d55', '#2a2c31', '#777b85'], cash: ['#4cc95b', '#2c9038', '#a8f0ae'], iron: ['#b3bcc4', '#7b848d', '#eef2f5'],
+};
+function drawItem(t) { blit(sprite('i' + t, 28, 12, 13, 10, () => drawItemRaw(t))); }
+function drawItemRaw(t) {
+  const c = ITC[t];
+  if (t === 'wood') { rr(-10, -6, 20, 6, 3, c[1]); rr(-10, -7, 20, 4.5, 2.2, c[0]); ell(10, -4.5, 2.6, 2.6, c[2]); return; }
+  rr(-9, -5, 18, 5, 2, c[1]); rr(-9, -7, 18, 4.5, 2, c[0]);
+  ctx.fillStyle = c[2];
+  if (t === 'cash') { ctx.fillRect(-3, -6.6, 6, 3.6); }
+  else if (t === 'raw' || t === 'cooked') { ctx.fillRect(-7, -6.6, 5, 1.4); ctx.fillRect(2, -5, 4, 1.2); }
+  else ctx.fillRect(-6, -6.6, 4, 1.3);
+}
+function drawStack(x, y, list, z0 = 34) {
+  for (let i = 0; i < list.length; i++) { at(x, y, z0 + i * 5); drawItem(list[i]); }
+}
+function drawPile(cx, cy, type, count, cols = 3, rows = 2, sx = 20, sy = 14, per = 10) {
+  if (count <= 0) return;
+  const slots = cols * rows, n = Math.min(count, slots * per);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const k = r * cols + c, h = Math.floor(n / slots) + (k < n % slots ? 1 : 0);
+    const x = cx + (c - (cols - 1) / 2) * sx, y = cy + (r - (rows - 1) / 2) * sy;
+    for (let i = 0; i < h; i++) { at(x, y, 2 + i * 5); drawItem(type); }
+  }
+}
+function shadow(rx = 14, ry = 6) { ell(0, 0, rx, ry, 'rgba(40,60,90,.18)'); }
+
+function drawPerson(coat, anim, moving, face, opts = {}) {
+  shadow(12, 5);
+  const sw = moving ? Math.sin(anim) * 4 : 0;
+  rr(-7 + sw * .5, -12, 5, 12, 2, '#2c3646'); rr(2 - sw * .5, -12, 5, 12, 2, '#2c3646');
+  rr(-10, -33, 20, 23, 7, coat);
+  rr(-10, -16, 20, 4, 2, 'rgba(255,255,255,.85)');
+  ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(2, -31, 7, 18);
+  // Arme
+  rr(-13, -30 - sw * .3, 5, 13, 2.5, coat); rr(8, -30 + sw * .3, 5, 13, 2.5, coat);
+  // Kopf mit Kapuze
+  ell(0, -40, 10.5, 10, coat);
+  ell(0, -39, 8.5, 8, '#f5f2ec');
+  ell(face * 1.2, -38.5, 6, 6, '#f1c7a0');
+  ell(face * 1.2 - 2.2, -39.5, 1, 1.2, '#2a2a2a'); ell(face * 1.2 + 2.2, -39.5, 1, 1.2, '#2a2a2a');
+  if (opts.beard) { ell(face * 1.2, -34.5, 4.5, 2.6, '#8a5a36'); }
+  if (opts.hat) { rr(-8, -52, 16, 5, 2, opts.hat); }
+}
+function drawAxe(spin) {
+  ctx.rotate(spin);
+  rr(-1.5, -12, 3, 22, 1.5, '#8b5a33');
+  poly([1, -12, 11, -15, 13, -5, 1, -6], '#cfd8df');
+  poly([1, -12, 11, -15, 11.5, -13, 1, -10.5], '#ffffff');
+}
+function drawBear(b) {
+  const s = b.big ? 1.3 : 1;
+  ctx.scale(b.face * s, s);
+  shadow(28, 9);
+  const bob = Math.sin(b.anim) * 1.5, lg = Math.sin(b.anim) * 4;
+  const leg = '#e6e4dc';
+  rr(-18, -14, 7, 14 + lg * .3, 3, leg); rr(-6, -14, 7, 14 - lg * .3, 3, leg);
+  rr(8, -14, 7, 14 - lg * .3, 3, leg); rr(18, -14, 7, 14 + lg * .3, 3, leg);
+  ell(0, -22 + bob, 27, 15, '#f7f6f1');
+  ell(-2, -16 + bob, 24, 8, '#e9e7df');
+  ell(-26, -24 + bob, 4, 4, '#f7f6f1');
+  ell(24, -27 + bob, 11, 10, '#f7f6f1');
+  ell(33, -25 + bob, 6.5, 5, '#ecebe4');
+  ell(38, -26 + bob, 2.4, 2, '#222');
+  ell(26, -30 + bob, 1.5, 1.6, '#222');
+  ell(18, -35 + bob, 3.6, 3.4, '#ebe9e1'); ell(18, -35 + bob, 1.8, 1.7, '#cfc9bd');
+  if (b.flash > 0) { ctx.globalAlpha = .5; ell(4, -22, 34, 18, '#ff4d4d'); ctx.globalAlpha = 1; }
+}
+function drawTree(tr, s = 1, decor = false) {
+  if (tr.stump) { ell(0, 0, 11, 5, '#7a4b2e'); ell(0, -3, 10, 4.5, '#c49067'); ell(0, -3, 5, 2, '#a8754f'); return; }
+  ctx.scale(s, s);
+  shadow(20, 7);
+  if (tr.shake > 0) ctx.rotate(Math.sin(tr.shake * 60) * .06);
+  rr(-3.5, -14, 7, 14, 2, '#7a4b2e');
+  const tiers = [[24, -10], [19, -28], [13, -45]];
+  for (const [w, y0] of tiers) {
+    poly([-w, y0, w, y0, 0, y0 - 30], '#4e86b6');
+    poly([-w, y0, 0, y0, 0, y0 - 30], '#6ea3d0');
+    poly([-w * .45, y0 - 16, 0, y0 - 30, w * .45, y0 - 16, 0, y0 - 20], '#ffffff');
+  }
+  if (!decor && tr.hp < tr.max) { screenHp(tr, 82, tr.hp / tr.max, '#ffcf4d'); }
+}
+function drawRock(r) {
+  if (r.stump) { ell(0, -2, 16 * r.s, 7 * r.s, '#9aa1a8'); ell(0, -3, 12 * r.s, 5 * r.s, '#b6bcc2'); return; }
+  ctx.scale(r.s, r.s);
+  if (r.shake > 0) ctx.translate(Math.sin(r.shake * 70) * 2, 0);
+  shadow(24, 9);
+  poly([-24, 0, -20, -20, -6, -32, 12, -28, 24, -14, 22, 0], '#7f878f');
+  poly([-20, -20, -6, -32, 12, -28, 4, -18, -10, -14], '#a9b1b8');
+  poly([4, -18, 12, -28, 24, -14, 22, 0, 8, -4], '#6b737b');
+  ell(-8, -10, 3.5, 2.5, '#e08a3a'); ell(10, -12, 3, 2.2, '#e6a04e'); ell(-2, -22, 2.5, 2, '#f0b060');
+  if (r.hp < r.max) screenHp(r, 50, r.hp / r.max, '#ffcf4d');
+}
+function drawYeti(y, t) {
+  ctx.scale(y.face * 1.3, 1.3);
+  shadow(44, 14);
+  const bob = Math.sin(y.anim) * 2, lg = Math.sin(y.anim) * 5;
+  rr(-22, -30, 16, 30 + lg * .2, 7, '#9aa6ba'); rr(8, -30, 16, 30 - lg * .2, 7, '#9aa6ba');
+  ell(0, -62 + bob, 42, 40, '#7d889c');
+  ell(0, -62 + bob, 40, 38, '#c9d1de');
+  ell(-8, -55 + bob, 30, 28, '#b6bfcf');
+  // Kristalle auf dem Rücken
+  for (const [cx, cy, h, w] of [[-22, -92, 26, 8], [-6, -100, 32, 9], [12, -94, 24, 8], [-32, -78, 18, 6]]) {
+    poly([cx - w, cy + bob, cx, cy - h + bob, cx + w, cy + bob], '#8f5bd9'); poly([cx, cy + bob, cx, cy - h + bob, cx + w, cy + bob], '#b98cff');
+  }
+  // Arme
+  rr(30, -78 + bob - lg * .3, 16, 44, 8, '#c3cbd9'); rr(-46, -78 + bob + lg * .3, 16, 44, 8, '#a9b3c4');
+  // Gesicht
+  ell(20, -70 + bob, 16, 15, '#6f7a8e');
+  ell(16, -74 + bob, 3, 3, '#ffd34d'); ell(26, -74 + bob, 3, 3, '#ffd34d');
+  poly([12, -63 + bob, 30, -63 + bob, 21, -58 + bob], '#ffffff');
+  poly([8, -88 + bob, 4, -104 + bob, 14, -90 + bob], '#f2efe6'); poly([28, -88 + bob, 36, -102 + bob, 32, -86 + bob], '#f2efe6');
+  if (y.flash > 0) { ctx.globalAlpha = .45; ell(0, -60, 46, 44, '#ff4d4d'); ctx.globalAlpha = 1; }
+}
+function drawFurnace(t) {
+  shadow(58, 22);
+  const lvl = S.lv.furnace;
+  // Füße
+  for (const k of [-1, 1]) {
+    poly([k * 26, -2, k * 52, 4, k * 54, -10, k * 30, -16], '#f2a531');
+    poly([k * 30, -16, k * 54, -10, k * 50, -16, k * 28, -22], '#ffc75a');
+  }
+  poly([-18, 8, 18, 8, 22, -6, -22, -6], '#e58f1d');
+  // Sockel
+  ell(0, -10, 46, 18, '#2c2e33'); rr(-46, -38, 92, 28, 4, '#3a3d43'); ell(0, -38, 46, 18, '#4a4d54');
+  // Körper
+  poly([-40, -38, 40, -38, 30, -112, -30, -112], '#4d5058');
+  poly([-40, -38, -10, -38, -8, -112, -30, -112], '#5d616a');
+  for (let i = 0; i < 3; i++) { const yy = -58 - i * 20, w = 38 - i * 2.8; rr(-w, yy, w * 2, 4, 2, '#35373c'); }
+  // Glut-Fenster
+  const fl = .7 + Math.sin(t * 9) * .15 + Math.sin(t * 23) * .08;
+  rr(-12, -66, 24, 16, 6, '#2a1a10'); ctx.globalAlpha = fl; rr(-10, -64, 20, 12, 5, '#ff9a2e'); ctx.globalAlpha = 1;
+  // Rand
+  ell(0, -112, 31, 11, '#2e3035'); ell(0, -113, 24, 8, '#ff8c1a'); ell(0, -114, 17, 5, '#ffd25a');
+  // Flamme
+  const fh = 26 + lvl * 5 + Math.sin(t * 11) * 4;
+  ctx.globalAlpha = .95;
+  poly([-16, -114, -6, -114 - fh * .75 + Math.sin(t * 13) * 3, 0, -114 - fh, 6, -114 - fh * .8, 16, -114], '#ff8a1c');
+  poly([-9, -114, -2, -114 - fh * .6, 4, -114 - fh * .7, 9, -114], '#ffd23f');
+  ctx.globalAlpha = 1;
+  // Stufen-Anzeige
+  for (let i = 0; i < 5; i++) ell(-16 + i * 8, -27, 2.6, 2.6, i < lvl ? '#ffb12b' : '#25272b');
+}
+function drawKiln(t) {
+  shadow(36, 14);
+  ell(0, -4, 34, 14, '#7c4a35');
+  rr(-34, -30, 68, 26, 6, '#a65d3f');
+  ell(0, -30, 34, 24, '#b86a49'); ell(-8, -36, 20, 14, '#c97b58');
+  for (let i = -2; i <= 2; i++) rr(i * 12 - 4, -24, 8, 4, 1, 'rgba(0,0,0,.12)');
+  rr(-10, -20, 20, 16, 8, '#2a1a12'); ctx.globalAlpha = .7 + Math.sin(t * 7) * .2; rr(-7, -16, 14, 11, 6, '#ff8a2a'); ctx.globalAlpha = 1;
+  rr(12, -72, 12, 30, 2, '#6d6f75'); rr(10, -74, 16, 5, 2, '#55575c');
+  for (let i = 0; i < 3; i++) { const k = ((t * .5 + i / 3) % 1); ctx.globalAlpha = (1 - k) * .45; ell(18 + k * 10, -80 - k * 50, 6 + k * 10, 5 + k * 8, '#9aa0a8'); }
+  ctx.globalAlpha = 1;
+}
+function drawTower(t) {
+  shadow(30, 11);
+  for (const [x1, x2] of [[-18, -12], [18, 12]]) { ctx.strokeStyle = '#8b5a33'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x2, -46); ctx.stroke(); }
+  ctx.strokeStyle = '#a9713f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-16, -10); ctx.lineTo(14, -36); ctx.moveTo(16, -10); ctx.lineTo(-14, -36); ctx.stroke();
+  rr(-24, -54, 48, 10, 3, '#b77a44'); rr(-24, -50, 48, 6, 2, '#94602f');
+  // Armbrust
+  ctx.save(); ctx.translate(0, -62);
+  const ax = Math.cos(towerAim), ay = Math.sin(towerAim) * TY;
+  const a = Math.atan2(ay, ax); ctx.rotate(a);
+  rr(-14, -3, 30, 6, 2, '#7a4b2e');
+  ctx.strokeStyle = '#5b3a22'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(12, 0, 14, -1.4, 1.4); ctx.stroke();
+  ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(14, -14); ctx.lineTo(-6, 0); ctx.lineTo(14, 14); ctx.stroke();
+  ctx.restore();
+}
+function drawTable(ct, type, count, built) {
+  if (!built) return;
+  shadow(56, 12);
+  rr(-48, -16, 6, 16, 1, '#8b5a33'); rr(42, -16, 6, 16, 1, '#8b5a33');
+  rr(-52, -24, 104, 10, 3, '#c98a52'); rr(-52, -26, 104, 6, 3, '#e3a96d');
+  if (count > 0) {
+    const n = Math.min(count, 40), cols = 4;
+    for (let c = 0; c < cols; c++) { const h = Math.floor(n / cols) + (c < n % cols ? 1 : 0); for (let i = 0; i < h; i++) { ctx.save(); ctx.translate(-33 + c * 22, -26 - i * 5); drawItem(type); ctx.restore(); } }
+  }
+}
+function treeSprite(sc) {
+  const b = Math.round(sc * 10) / 10;
+  blit(sprite('t' + b, 56 * b, 92 * b, 28 * b, 80 * b, () => drawTree({ hp: 1, max: 1 }, b, true)));
+}
+function drawPost(p) {
+  shadow(6, 3);
+  rr(-3, -p.h, 6, p.h, 1.5, '#ead6bd'); ctx.fillStyle = 'rgba(0,0,0,.08)'; ctx.fillRect(0.5, -p.h, 2.5, p.h);
+  poly([-3, -p.h, 0, -p.h - 5, 3, -p.h], '#f6e8d6');
+}
+function drawGate(s, open) {
+  const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2;
+  return () => {
+    const dx = s.x2 - s.x1, dy = (s.y2 - s.y1) * TY, L = Math.hypot(dx, dy);
+    at(mx, my); ctx.rotate(Math.atan2(dy, dx));
+    if (!open) {
+      rr(-L / 2, -32, L, 30, 3, '#b8333b'); rr(-L / 2, -32, L, 6, 3, '#d94a4f');
+      ctx.strokeStyle = '#8a2228'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-L / 2 + 4, -4); ctx.lineTo(-2, -30); ctx.moveTo(L / 2 - 4, -4); ctx.lineTo(2, -30); ctx.stroke();
+      ctx.rotate(-Math.atan2(dy, dx));
+      // Schloss
+      rr(-11, -50, 22, 18, 4, '#9ea6ae'); ctx.strokeStyle = '#9ea6ae'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, -50, 7, Math.PI, 0); ctx.stroke(); ell(0, -42, 2.5, 2.5, '#555');
+    } else {
+      rr(-L / 2 - 4, -36, 8, 36, 2, '#b8333b'); rr(L / 2 - 4, -36, 8, 36, 2, '#b8333b');
+    }
+  };
+}
+function screenHp(o, zTop, frac, col = '#ff5050') {
+  const m = ctx.getTransform();
+  screenT();
+  const p = P(o.x, o.y, zTop), w = 34;
+  rr(p[0] - w / 2 - 1, p[1] - 1, w + 2, 6, 3, 'rgba(0,0,0,.45)'); rr(p[0] - w / 2, p[1], w * clamp(frac, 0, 1), 4, 2, col);
+  ctx.setTransform(m);
+}
+
+// =====================================================================
+//  ZEICHNEN – Boden
+// =====================================================================
+function drawGround(t) {
+  screenT();
+  ctx.fillStyle = '#e6eef5'; ctx.fillRect(0, 0, W, H);
+  groundT();
+  // Schneehügel
+  for (const m of mounds) ell(m.x, m.y, m.r, m.r * .7, 'rgba(255,255,255,.55)');
+  // Zonen
+  ctx.fillStyle = '#f3f7fb'; ctx.fillRect(FIELD.x0, FIELD.y0, FIELD.x1 - FIELD.x0, FIELD.y1 - FIELD.y0);
+  ctx.fillStyle = '#eef4f8'; ctx.fillRect(FOREST.x0, FOREST.y0, FOREST.x1 - FOREST.x0, FOREST.y1 - FOREST.y0);
+  ctx.fillStyle = S.own.mine ? '#e3e6ea' : '#e9edf0'; ctx.fillRect(MINE.x0, MINE.y0, MINE.x1 - MINE.x0, MINE.y1 - MINE.y0);
+  // Weg der Überlebenden
+  ctx.fillStyle = 'rgba(190,205,220,.45)';
+  ctx.fillRect(-140, 270, 100, 560); ctx.fillRect(40, 270, 100, 560);
+  // Korridore
+  ctx.fillStyle = '#d9a47b';
+  ctx.beginPath(); ctx.moveTo(200, -172); ctx.lineTo(318, -172); ctx.lineTo(318, -88); ctx.lineTo(249, -88); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-200, -172); ctx.lineTo(-318, -172); ctx.lineTo(-318, -88); ctx.lineTo(-249, -88); ctx.closePath(); ctx.fill();
+  // Lager-Boden
+  ctx.beginPath(); for (let i = 0; i < 6; i++) { const [x, y] = hexV(i); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.closePath();
+  ctx.fillStyle = '#d29a70'; ctx.fill();
+  ctx.beginPath(); for (let i = 0; i < 6; i++) { const [x, y] = hexV(i); i ? ctx.lineTo(x * .93, y * .93) : ctx.moveTo(x * .93, y * .93); } ctx.closePath();
+  ctx.fillStyle = '#dca67c'; ctx.fill();
+  // Wärme-Schein
+  const g = ctx.createRadialGradient(FURN.x, FURN.y, 20, FURN.x, FURN.y, 150);
+  g.addColorStop(0, 'rgba(255,190,90,.45)'); g.addColorStop(1, 'rgba(255,190,90,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(FURN.x, FURN.y, 150, 0, TAU); ctx.fill();
+  // Wärme-Radius (nur draußen sichtbar)
+  if (!inHexPt(player.x, player.y, HR)) {
+    ctx.setLineDash([14, 12]); ctx.strokeStyle = 'rgba(255,150,60,.5)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(FURN.x, FURN.y, heatR(), 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // Ofen-Ring
+  ctx.setLineDash([10, 9]); ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(FURN.x, FURN.y, 78, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+  // Stations-Felder
+  const pad = (p, col = 'rgba(60,62,70,.85)') => { rr(p.x - 26, p.y - 24, 52, 48, 8, col); rr(p.x - 22, p.y - 20, 44, 40, 6, 'rgba(255,255,255,.06)'); };
+  pad(GRILL_IN); pad(GRILL_OUT);
+  if (S.own.kiln) { pad(KILN_IN); pad(KILN_OUT); }
+  // Geld-Feld
+  rr(CASH.x - 34, CASH.y - 26, 68, 52, 8, 'rgba(60,62,70,.55)');
+  // Theken-Zonen
+  ctx.setLineDash([8, 7]); ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(MEAT_CT.zx - 40, MEAT_CT.zy - 18, 80, 36, 8); ctx.stroke();
+  if (S.own.coalCt) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(COAL_CT.zx - 40, COAL_CT.zy - 18, 80, 36, 8); ctx.stroke(); }
+  ctx.setLineDash([]);
+  // Förderband
+  if (S.own.tower) {
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#5c6068'; ctx.lineWidth = 22; ctx.beginPath(); ctx.moveTo(...CONV[0]); ctx.lineTo(...CONV[1]); ctx.lineTo(...CONV[2]); ctx.stroke();
+    ctx.strokeStyle = '#7d828b'; ctx.lineWidth = 16; ctx.stroke();
+    ctx.setLineDash([4, 8]); ctx.lineDashOffset = -t * 85; ctx.strokeStyle = '#5c6068'; ctx.lineWidth = 16; ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    ctx.lineCap = 'butt';
+  }
+  // Bau-Felder
+  for (const p of PADS) {
+    if (!padActive(p)) continue;
+    const c = p.cost(), f = (S.paid[p.id] || 0) / c, on = dist(player.x, player.y, p.x, p.y) < 32;
+    rr(p.x - 30, p.y - 28, 60, 56, 10, on ? 'rgba(40,60,50,.6)' : 'rgba(40,45,55,.45)');
+    if (f > 0) rr(p.x - 30, p.y + 28 - 56 * f, 60, 56 * f, 10, 'rgba(70,200,90,.65)');
+    ctx.setLineDash([9, 7]); ctx.strokeStyle = p.cur === 'iron' ? '#dfe6ec' : '#ffffff'; ctx.lineWidth = 3;
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(p.x - 30, p.y - 28, 60, 56, 10); else ctx.rect(p.x - 30, p.y - 28, 60, 56); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // Yeti-Angriffe
+  for (const c of casts) {
+    const k = 1 - c.t / c.T;
+    ell(c.x, c.y, c.r, c.r, 'rgba(255,60,60,.18)');
+    ell(c.x, c.y, c.r * k, c.r * k, 'rgba(255,60,60,.35)');
+    ctx.strokeStyle = 'rgba(255,60,60,.8)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, TAU); ctx.stroke();
+  }
+}
+
+// =====================================================================
+//  ZEICHNEN – Hauptszene
+// =====================================================================
+const flakes = Array.from({ length: 260 }, () => ({ x: Math.random(), y: Math.random(), s: rand(1, 3), v: rand(.3, 1) }));
+function draw(now) {
+  const t = S.time;
+  shX = shake > 0 ? rand(-shake, shake) : 0; shY = shake > 0 ? rand(-shake, shake) : 0;
+  drawGround(t);
+  const DL = [];
+  const add = (y, f) => DL.push([y, f]);
+
+  for (const p of posts) {
+    if (p.s.k === 'tC' && S.own.coalCt) continue;
+    if (!onScreen(p.x, p.y, 40)) continue;
+    add(p.y, () => { at(p.x, p.y); const h = Math.round(p.h); blit(sprite('p' + h, 16, h + 12, 8, h + 7, () => drawPost({ h }))); });
+  }
+  for (const s of segs) if (s.k === 'gF' || s.k === 'gI') { const open = !segActive(s); add((s.y1 + s.y2) / 2, drawGate(s, open)); }
+  for (const d of decoTrees) if (onScreen(d.x, d.y)) add(d.y, () => { at(d.x, d.y); treeSprite(d.s); });
+  for (const tr of trees) if (onScreen(tr.x, tr.y)) add(tr.y, () => { at(tr.x, tr.y); if (!tr.stump && tr.shake <= 0 && tr.hp >= tr.max) treeSprite(tr.s); else drawTree(tr, tr.s); });
+  for (const r of rocks) if (onScreen(r.x, r.y)) add(r.y, () => { at(r.x, r.y); drawRock(r); });
+  for (const b of bears) if (!b.dead && onScreen(b.x, b.y)) add(b.y, () => { at(b.x, b.y); drawBear(b); if (b.hp < b.max) screenHp(b, b.big ? 62 : 50, b.hp / b.max); });
+  if (yeti && !yeti.dead && onScreen(yeti.x, yeti.y, 200)) add(yeti.y, () => { at(yeti.x, yeti.y); drawYeti(yeti, t); screenHp(yeti, 170, yeti.hp / yeti.max, '#b47cff'); });
+  for (const sh of shards) add(sh.y, () => {
+    at(sh.x, sh.y); ctx.rotate(sh.rot); ctx.globalAlpha = Math.min(1, sh.life * 2);
+    const h = sh.h * Math.min(1, (1.1 - sh.life) * 8 + .2);
+    poly([-7, 0, 0, -h, 7, 0], '#8f5bd9'); poly([0, 0, 0, -h, 7, 0], '#c39bff'); ctx.globalAlpha = 1;
+  });
+
+  add(FURN.y, () => { at(FURN.x, FURN.y); drawFurnace(t); });
+  if (S.own.kiln) add(KILN.y, () => { at(KILN.x, KILN.y); drawKiln(t); });
+  if (S.own.tower) add(TOWER.y, () => { at(TOWER.x, TOWER.y); drawTower(t); });
+  add(MEAT_CT.y, () => { at(MEAT_CT.x, MEAT_CT.y); drawTable(MEAT_CT, 'cooked', S.meatCt, true); });
+  add(COAL_CT.y, () => { at(COAL_CT.x, COAL_CT.y); drawTable(COAL_CT, 'coal', S.coalCt, S.own.coalCt); });
+  add(GRILL_IN.y, () => drawPile(GRILL_IN.x, GRILL_IN.y, 'raw', S.grillIn));
+  add(GRILL_OUT.y, () => drawPile(GRILL_OUT.x, GRILL_OUT.y, 'cooked', S.grillOut));
+  if (S.own.kiln) { add(KILN_IN.y, () => drawPile(KILN_IN.x, KILN_IN.y, 'wood', S.kilnIn)); add(KILN_OUT.y, () => drawPile(KILN_OUT.x, KILN_OUT.y, 'coal', S.kilnOut)); }
+  add(CASH.y, () => drawPile(CASH.x, CASH.y, 'cash', Math.ceil(S.cashPile / 2), 3, 3, 20, 13, 8));
+  // Förderband-Fleisch
+  if (S.own.tower) for (const c of conv) {
+    let d = c.d; const L1 = dist(...CONV[0], ...CONV[1]); let x, y;
+    if (d < L1) { x = lerp(CONV[0][0], CONV[1][0], d / L1); y = lerp(CONV[0][1], CONV[1][1], d / L1); }
+    else { const L2 = dist(...CONV[1], ...CONV[2]); const k = Math.min(1, (d - L1) / L2); x = lerp(CONV[1][0], CONV[2][0], k); y = lerp(CONV[1][1], CONV[2][1], k); }
+    add(y, () => { at(x, y, 4); drawItem('raw'); });
+  }
+  // Drops
+  for (const d of drops) if (onScreen(d.x, d.y)) add(d.y, () => { at(d.x, d.y); ell(0, 0, 8, 3, 'rgba(0,0,0,.12)'); at(d.x, d.y, d.z + 4 + (d.z === 0 ? Math.sin(t * 4 + d.x) * 2 + 2 : 0)); drawItem(d.type); });
+  // Überlebende
+  for (const k in queues) for (const s of queues[k].list) add(s.y, () => { at(s.x, s.y); drawPerson(s.col, s.anim, true, s.face); });
+  // Helfer
+  for (const n of npcs) add(n.y, () => {
+    at(n.x, n.y); const col = n.kind === 'hunter' ? '#c7553a' : n.kind === 'lumber' ? '#6a8f3a' : '#e0a133';
+    drawPerson(col, n.anim, true, n.face, { beard: n.kind !== 'server', hat: n.kind === 'server' ? '#ffffff' : null });
+    if (n.kind !== 'server') { for (let i = 0; i < 1; i++) { const a = n.axeA; at(n.x + Math.cos(a) * 34, n.y + Math.sin(a) * 34, 14); drawAxe(a * 3); } }
+    drawStack(n.x - 4 * n.face, n.y - 6, n.stack, 30);
+  });
+  // Spieler
+  if (player.dead <= 0) {
+    add(player.y, () => {
+      drawStack(player.x - 5 * player.face, player.y - 7, player.stack);
+      at(player.x, player.y);
+      ell(0, 0, 20, 9, 'rgba(60,200,255,.25)');
+      ctx.strokeStyle = 'rgba(120,220,255,.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, 20, 9, 0, 0, TAU); ctx.stroke();
+      drawPerson('#25a2c9', player.anim, player.moving, player.face, { beard: true });
+    });
+    for (let i = 0; i < S.lv.axes; i++) {
+      const a = player.axeA + i * TAU / S.lv.axes, ax = player.x + Math.cos(a) * ORB, ay = player.y + Math.sin(a) * ORB;
+      add(ay, () => { at(ax, ay); ell(0, 0, 7, 3, 'rgba(0,0,0,.12)'); at(ax, ay, 16); drawAxe(a * 2.5 + t * 6); });
+    }
+  }
+  DL.sort((a, b) => a[0] - b[0]);
+  for (const [, f] of DL) { ctx.save(); f(); ctx.restore(); }
+
+  // Bolzen
+  for (const b of bolts) { at(b.x, b.y, b.z); const a = Math.atan2(b.tgt.y - b.y, b.tgt.x - b.x); ctx.rotate(Math.atan2(Math.sin(a) * TY, Math.cos(a))); rr(-9, -1.5, 18, 3, 1, '#6b4426'); poly([9, -3, 14, 0, 9, 3], '#ccd'); }
+  // Flieger
+  for (const f of flyers) {
+    const k = clamp(f.t / f.dur, 0, 1), e = k * (2 - k);
+    at(lerp(f.x0, f.tx, e), lerp(f.y0, f.ty, e), lerp(f.z0, f.tz, e) + Math.sin(k * Math.PI) * 45); drawItem(f.type);
+  }
+  // Partikel
+  for (const p of parts) { at(p.x, p.y, p.z); ctx.globalAlpha = clamp(p.life / .4, 0, 1); rr(-p.size / 2, -p.size / 2, p.size, p.size, 1, p.col); }
+  ctx.globalAlpha = 1;
+
+  drawOverlays(t);
+  drawHUD(t);
+}
+
+function drawOverlays(t) {
+  screenT();
+  // Bau-Feld-Beschriftungen
+  let nearPad = null, npd = 140;
+  for (const p of PADS) { if (!padActive(p)) continue; const d = dist(player.x, player.y, p.x, p.y); if (d < npd) { npd = d; nearPad = p; } }
+  for (const p of PADS) {
+    if (!padActive(p) || !onScreen(p.x, p.y)) continue;
+    const c = p.cost(), rem = c - (S.paid[p.id] || 0), pp = P(p.x, p.y);
+    const s = clamp(Z * 1.15, .7, 1.2);
+    txt(p.ic, pp[0], pp[1] - 8 * s, 24 * s, '#fff', 'center', null);
+    txt((p.cur === 'iron' ? '⛓ ' : '$ ') + rem, pp[0], pp[1] + 14 * s, 15 * s, p.cur === 'iron' ? '#e6edf2' : '#9dffad');
+    if (p === nearPad) {
+      const nm = p.name(); ctx.font = `800 ${13 * s}px system-ui,sans-serif`; const tw = ctx.measureText(nm).width + 16 * s;
+      ctx.font = `600 ${11 * s}px system-ui,sans-serif`; const dw = p.desc ? ctx.measureText(p.desc).width + 16 * s : 0;
+      const bw = Math.max(tw, dw), bh = p.desc ? 38 * s : 22 * s;
+      rr(pp[0] - bw / 2, pp[1] - 36 * s - bh, bw, bh, 11 * s, 'rgba(25,35,50,.78)');
+      txt(nm, pp[0], pp[1] - 36 * s - bh + 11 * s, 13 * s, '#fff', 'center', null);
+      if (p.desc) txt(p.desc, pp[0], pp[1] - 36 * s - bh + 28 * s, 11 * s, '#cfe3f2', 'center', null, 600);
+    }
+  }
+  // Stations-Beschriftungen (dezent)
+  const lab = (o, s, z = 0) => { const pp = P(o.x, o.y, z); txt(s, pp[0], pp[1] + 34 * Z, 11 * clamp(Z * 1.2, .8, 1.2), 'rgba(255,255,255,.9)', 'center', 'rgba(0,0,0,.35)', 700); };
+  lab(GRILL_IN, 'Rohes Fleisch'); lab(GRILL_OUT, 'Gebraten');
+  if (S.own.kiln) { lab(KILN_IN, 'Holz'); lab(KILN_OUT, 'Kohle'); }
+  // Sprechblasen der Überlebenden
+  for (const k in queues) {
+    const q = queues[k];
+    for (const s of q.list) {
+      if (s.state === 'leave') continue;
+      const idx = q.list.filter(o => o.state !== 'leave').indexOf(s);
+      if (idx > 1) continue;
+      const pp = P(s.x, s.y, 68), sc = clamp(Z * 1.2, .75, 1.2);
+      const w = 46 * sc, h = 30 * sc, x = pp[0] - w / 2, y = pp[1] - h;
+      const full = s.got / s.want;
+      rr(x, y, w, h, 10 * sc, '#ffffff');
+      if (full > 0) { ctx.save(); ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, 10 * sc); ctx.clip(); ctx.fillStyle = '#7be08a'; ctx.fillRect(x, y + h * (1 - full), w, h * full); ctx.restore(); }
+      poly([pp[0] - 6 * sc, y + h - 1, pp[0] + 6 * sc, y + h - 1, pp[0], y + h + 7 * sc], '#ffffff');
+      setT(sc * 1.1, 0, 0, sc * 1.1, x + 14 * sc, y + h / 2 + 4 * sc); drawItem(q.item); screenT();
+      txt(String(s.want - s.got), x + w - 13 * sc, y + h / 2, 14 * sc, '#333', 'center', null);
+    }
+  }
+  // Schwebende Texte
+  for (const f of texts) { const pp = P(f.x, f.y, f.z); ctx.globalAlpha = clamp(f.life * 2, 0, 1); txt(f.s, pp[0], pp[1], f.size * clamp(Z * 1.2, .8, 1.3), f.col); }
+  ctx.globalAlpha = 1;
+  // Ziel-Pfeil
+  const h = hint();
+  if (h) {
+    const bob = Math.abs(Math.sin(t * 4)) * 12;
+    const pp = P(h.x, h.y, 70 + bob), s = clamp(Z * 1.2, .8, 1.3);
+    if (!h.soft || dist(player.x, player.y, h.x, h.y) > 120) {
+      ctx.save(); ctx.translate(pp[0], pp[1]); ctx.scale(s, s);
+      poly([-9, -26, 9, -26, 9, -8, 18, -8, 0, 10, -18, -8, -9, -8], 'rgba(0,0,0,.25)');
+      ctx.translate(-2, -3);
+      poly([-9, -26, 9, -26, 9, -8, 18, -8, 0, 10, -18, -8, -9, -8], '#3fdc5a');
+      poly([-9, -26, 0, -26, 0, 10, -18, -8, -9, -8], '#6cf284');
+      ctx.restore();
+    }
+    // Richtungs-Pfeil am Spieler
+    const d = dist(player.x, player.y, h.x, h.y);
+    if (d > 140 && player.dead <= 0) {
+      const a = Math.atan2((h.y - player.y) * TY, h.x - player.x), pc = P(player.x, player.y);
+      ctx.save(); ctx.translate(pc[0] + Math.cos(a) * 48 * Z, pc[1] + Math.sin(a) * 48 * Z); ctx.rotate(a); ctx.scale(Z, Z);
+      poly([14, 0, -6, -10, -2, 0, -6, 10], 'rgba(60,230,90,.9)'); ctx.restore();
+    }
+  }
+  // Schneefall
+  const bl = blizzard(), n = bl ? 260 : 70;
+  if (bl) { ctx.fillStyle = 'rgba(225,238,250,.33)'; ctx.fillRect(0, 0, W, H); }
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  for (let i = 0; i < n; i++) {
+    const f = flakes[i];
+    f.y += (bl ? .010 : .0016) * f.v; f.x += (bl ? .006 : .0005) * f.v;
+    if (f.y > 1) { f.y -= 1; f.x = Math.random(); } if (f.x > 1) f.x -= 1;
+    ctx.beginPath(); ctx.arc(f.x * W, f.y * H, f.s * (bl ? 1.2 : 1), 0, TAU); ctx.fill();
+  }
+  // Kälte-Vignette
+  if (player.warm < 60 && player.dead <= 0) {
+    const k = (60 - player.warm) / 60;
+    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .3, W / 2, H / 2, Math.max(W, H) * .75);
+    g.addColorStop(0, 'rgba(150,210,255,0)'); g.addColorStop(1, `rgba(150,210,255,${.65 * k})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  if (player.hurtT > .45) { ctx.fillStyle = 'rgba(255,0,0,.12)'; ctx.fillRect(0, 0, W, H); }
+}
+
+function pill(x, y, w, icon, val, col = '#fff') {
+  rr(x, y, w, 34, 17, 'rgba(25,35,50,.55)');
+  ctx.save(); ctx.translate(x + 20, y + 22); ctx.scale(1.25, 1.25); drawItem(icon); ctx.restore();
+  txt(String(val), x + w - 12, y + 17, 18, col, 'right', 'rgba(0,0,0,.35)');
+}
+function bar(x, y, w, frac, col, label) {
+  rr(x, y, w, 12, 6, 'rgba(25,35,50,.5)'); rr(x + 2, y + 2, (w - 4) * clamp(frac, 0, 1), 8, 4, col);
+  txt(label, x + w + 8, y + 6, 12, '#fff', 'left', 'rgba(0,0,0,.45)', 700);
+}
+function drawHUD(t) {
+  screenT();
+  const top = 12 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0);
+  // Titel
+  txt('GLUTFROST', 66, top + 14, 22, '#ffffff', 'left', '#2a5d86', 900);
+  txt('Lager im ewigen Eis', 67, top + 34, 11, '#e9f4ff', 'left', 'rgba(20,50,80,.6)', 700);
+  // Ressourcen
+  const pw = 108, x = W - pw - 12;
+  if (S.cash > prevCash) hudBump = 1; prevCash = S.cash;
+  ctx.save(); const bs = 1 + hudBump * .12; ctx.translate(x + pw / 2, top + 17); ctx.scale(bs, bs); ctx.translate(-(x + pw / 2), -(top + 17));
+  pill(x, top, pw, 'cash', Math.round(hudCash), '#bfffc8'); ctx.restore();
+  let y = top + 40;
+  if (S.own.mine || S.iron > 0) { pill(x, y, pw, 'iron', S.iron, '#e6edf2'); y += 40; }
+  const n = player.stack.length, c = cap();
+  rr(x, y, pw, 34, 17, 'rgba(25,35,50,.55)');
+  txt('🎒', x + 20, y + 17, 16, '#fff', 'center', null);
+  txt(n + '/' + c, x + pw - 12, y + 17, 17, n >= c ? '#ffb35c' : '#fff', 'right', 'rgba(0,0,0,.35)');
+  if (n >= c) txt('VOLL', x + pw / 2, y + 44, 12, '#ffb35c', 'center');
+  // Leben/Wärme
+  if (player.hp < 100 || player.warm < 100) {
+    bar(14, top + 56, 120, player.hp / 100, '#ff5a5a', 'Leben');
+    bar(14, top + 74, 120, player.warm / 100, player.warm < 30 ? '#5ab8ff' : '#ffaa3b', 'Wärme');
+  }
+  // Schneesturm-Info
+  if (blizzard()) { const r = Math.ceil(S.nextBliz + 28 - S.time); txt('❄️ Schneesturm – noch ' + r + 's', W / 2, top + 100, 15, '#ffffff', 'center', '#2a5d86'); }
+  else if (S.own.forest && S.nextBliz - S.time < 30 && S.nextBliz > S.time) txt('Schneesturm in ' + Math.ceil(S.nextBliz - S.time) + 's', W / 2, top + 100, 13, '#dff0ff', 'center', '#2a5d86');
+  // Hinweis
+  const h = hint();
+  if (h && h.t) {
+    ctx.font = '700 14px system-ui,sans-serif'; const tw = ctx.measureText(h.t).width + 28;
+    rr(W / 2 - tw / 2, H - 58, tw, 32, 16, 'rgba(25,35,50,.55)');
+    txt(h.t, W / 2, H - 42, 14, '#fff', 'center', null, 700);
+  }
+  if (!firstMove && player.dead <= 0) {
+    const a = (Math.sin(t * 3) + 1) / 2;
+    txt('Tippen & ziehen zum Bewegen', W / 2, H * .72, 20, '#ffffff', 'center', 'rgba(20,40,70,.6)');
+    ctx.globalAlpha = .6; ell(W / 2 - 30 + a * 60, H * .72 + 45, 18, 18, '#ffffff'); ctx.globalAlpha = 1;
+  }
+  // Joystick
+  if (joy.on) {
+    ctx.globalAlpha = .35; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(joy.ox, joy.oy, 55, 0, TAU); ctx.stroke(); ell(joy.ox, joy.oy, 55, 55, 'rgba(255,255,255,.25)');
+    const dx = joy.x - joy.ox, dy = joy.y - joy.oy, l = Math.hypot(dx, dy), m = Math.min(l, 55);
+    ctx.globalAlpha = .8; ell(joy.ox + (l ? dx / l * m : 0), joy.oy + (l ? dy / l * m : 0), 24, 24, '#ffffff'); ctx.globalAlpha = 1;
+  }
+  // Banner
+  if (banner) {
+    const a = clamp(banner.t * 2, 0, 1); ctx.globalAlpha = a;
+    rr(W / 2 - 170, H * .3 - 40, 340, 80, 18, 'rgba(25,35,50,.72)');
+    txt(banner.a, W / 2, H * .3 - 12, 22, '#fff', 'center', null);
+    txt(banner.b, W / 2, H * .3 + 18, 13, '#d8e8f5', 'center', null, 600);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// =====================================================================
+//  MENÜ
+// =====================================================================
+let paused = false;
+const $ = id => document.getElementById(id);
+function show(id, on) { $(id).classList.toggle('hidden', !on); paused = ['menu', 'help', 'confirm', 'offline'].some(k => !$(k).classList.contains('hidden')); }
+function toggleMenu() { show('menu', $('menu').classList.contains('hidden')); }
+$('menuBtn').onclick = () => show('menu', true);
+$('bResume').onclick = () => show('menu', false);
+$('bHelp').onclick = () => { show('menu', false); show('help', true); };
+$('bHelpOk').onclick = () => { show('help', false); S.helpSeen = 1; save(); };
+$('bMute').onclick = () => { S.muted = S.muted ? 0 : 1; $('bMute').textContent = 'Ton: ' + (S.muted ? 'aus' : 'an'); save(); };
+$('bMute').textContent = 'Ton: ' + (S.muted ? 'aus' : 'an');
+$('bReset').onclick = () => { show('menu', false); show('confirm', true); };
+$('bNo').onclick = () => show('confirm', false);
+$('bYes').onclick = () => { resetting = true; localStorage.removeItem(KEY); location.reload(); };
+if (!S.helpSeen) show('help', true);
+// ---------- Offline-Einnahmen der Helfer ----------
+function offlineRate() {
+  if (!S.own.server) return 0;
+  const meat = (S.own.tower ? .2 : 0) + .6 * S.lv.hunter;
+  const coal = S.own.lumber && S.own.kiln && S.own.coalCt ? .55 : 0;
+  return meat * meatPrice() + coal * (2 + S.lv.furnace);
+}
+let offlineGain = 0;
+function checkOffline() {
+  if (!S.lastSeen || resetting) return;
+  const sec = Math.min(7200, (Date.now() - S.lastSeen) / 1000);
+  const gain = Math.floor(offlineRate() * sec * .15);
+  S.lastSeen = Date.now();
+  if (sec < 60 || gain < 5) return;
+  offlineGain = gain;
+  const min = Math.round(sec / 60);
+  $('offTxt').innerHTML = `Deine Helfer haben in ${min >= 120 ? '2 Stunden (Maximum)' : min + ' Minuten'} <b>${gain} $</b> verdient.`;
+  show('offline', true);
+}
+$('bOff').onclick = () => {
+  S.cash += offlineGain; ftext(player.x, player.y, 80, '+' + offlineGain + ' $', '#7cff9a', 22); snd('buy'); buzz([25, 40, 25]);
+  offlineGain = 0; show('offline', false); save();
+};
+if (S.helpSeen) checkOffline();
+addEventListener('visibilitychange', () => { if (document.hidden) save(); else checkOffline(); });
+addEventListener('pagehide', save);
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { });
+
+// =====================================================================
+//  LOOP
+// =====================================================================
+camX = player.x; camY = player.y - 70 / TY;
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (!paused) update(dt);
+  draw(now);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+// Debug-Zugriff für Tests
+window.__g = { S, player, bears, PADS, queues, npcs, get yeti() { return yeti; } };
+</script>
+</body>
+</html>
