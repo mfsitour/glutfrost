@@ -23,6 +23,10 @@ const DEF = () => ({
   st: {}, ach: {}, book: {}, sparks: 0, diaryNew: 0,
   // Kapitel 3: Tag und Nacht, Munition, Rudelführer
   dayT: 0, nightNo: 0, nightsOk: 0, shots: 0, ammoW: 0, ammoC: 0, bossDead: 0, frz: {}, music: 1,
+  // Kapitel 4–6 und Endspiel
+  tools: 0, cloth: 0, m: {}, gear: { axe: null, coat: null, boots: null, charm: null }, inv: [],
+  run: {}, // Zähler nur für diesen Durchlauf (S.st zählt über alle „Neues Feuer“ hinweg)
+  golemDead: 0, wyrmDead: 0, guardDead: 0, nests: 0, siege: 0, finale: 0, glut: {}, ng: 0, bestNight: 0,
 });
 let S = DEF();
 function load() {
@@ -32,7 +36,7 @@ function load() {
     if (!raw && BETA) { raw = localStorage.getItem(LIVE_KEY); if (raw) localStorage.setItem(KEY, raw); }
     const j = JSON.parse(raw);
     // Fehlende Felder alter Spielstände mit Standardwerten auffüllen
-    if (j) { const d = DEF(), lv = Object.assign(d.lv, j.lv || {}), own = Object.assign(d.own, j.own || {}); S = Object.assign(d, j); S.lv = lv; S.own = own; S.paid = j.paid || {}; S.st = j.st || {}; S.ach = j.ach || {}; S.book = j.book || {}; S.offers = j.offers || {}; S.qNext = j.qNext || {}; S.quests = j.quests || []; S.frz = j.frz || {}; }
+    if (j) { const d = DEF(), lv = Object.assign(d.lv, j.lv || {}), own = Object.assign(d.own, j.own || {}); S = Object.assign(d, j); S.lv = lv; S.own = own; S.paid = j.paid || {}; S.st = j.st || {}; S.ach = j.ach || {}; S.book = j.book || {}; S.offers = j.offers || {}; S.qNext = j.qNext || {}; S.quests = j.quests || []; S.frz = j.frz || {}; S.m = j.m || {}; S.gear = Object.assign(d.gear, j.gear || {}); S.inv = j.inv || []; S.glut = j.glut || {}; S.run = j.run || Object.assign({}, S.st); }
   } catch (e) { }
 }
 let resetting = false;
@@ -40,11 +44,13 @@ function save() { if (resetting) return; S.lastSeen = Date.now(); try { localSto
 load();
 hudCash = prevCash = S.cash;
 
-const cap = () => 10 + 8 * S.lv.cap + 10 * S.lv.store;
-const speed = () => 195 * (1 + 0.16 * S.lv.boots) * bookMul('finds');
-const dmg = () => 1 + S.lv.sharp;
+const cap = () => 10 + 8 * S.lv.cap + 10 * S.lv.store + 5 * glutLv('cap');
+const speed = () => 195 * (1 + 0.16 * S.lv.boots) * bookMul('finds') * gearMul('speed') * (1 + .08 * glutLv('speed'));
+const dmg = () => (1 + S.lv.sharp) * gearMul('dmg');
 const heatR = () => 330 + 45 * S.lv.furnace;
-const cookT = () => 0.75 / (1 + 0.35 * (S.lv.furnace - 1));
+const cookT = () => 0.75 / (1 + 0.35 * (Math.min(S.lv.furnace, 15) - 1)) / (1 + .15 * glutLv('cook'));
+// Ab Ofenstufe 7 steigen alle Preise mit jeder Stufe um 22 % (das Lager wird reicher)
+const priceMul = () => Math.pow(1.22, Math.max(0, S.lv.furnace - 6));
 const meatPrice = () => 1 + S.lv.furnace;
 const coalPrice = () => (2 + S.lv.furnace) * (blizzard() ? 2 : 1);
 const fishPrice = () => 3 + S.lv.furnace + S.lv.huts;

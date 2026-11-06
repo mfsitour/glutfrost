@@ -6,7 +6,7 @@
 // emit() ist die eine Stelle, an der das Spiel meldet, was passiert ist.
 // own = vom Spieler selbst (nicht von Helfern oder dem Turm).
 function emit(k, n = 1, own = true) {
-  S.st[k] = (S.st[k] || 0) + n;
+  S.st[k] = (S.st[k] || 0) + n; S.run[k] = (S.run[k] || 0) + n;
   if (own) questEvent(k, n);
 }
 const stv = k => S.st[k] || 0;
@@ -179,13 +179,11 @@ function updateDiaryDot() { $('diaryDot').classList.toggle('hidden', !S.diaryNew
 function renderDiary() {
   for (const b of document.querySelectorAll('#diaryTabs button')) b.classList.toggle('on', b.dataset.tab === diaryTab);
   const el = $('diaryBody');
-  if (diaryTab === 'goals') el.innerHTML = goalsHTML();
-  else if (diaryTab === 'ach') el.innerHTML = achHTML();
-  else if (diaryTab === 'book') el.innerHTML = bookHTML();
-  else el.innerHTML = statsHTML();
+  el.innerHTML = DIARY[diaryTab]();
   const c = el.querySelector('canvas.route'); if (c) drawRoute(c, S.ch);
   el.scrollTop = 0;
 }
+const DIARY = { goals: () => goalsHTML(), ach: () => achHTML(), book: () => bookHTML(), stats: () => statsHTML(), gear: () => gearHTML(), glut: () => glutHTML() };
 function goalsHTML() {
   const c = curChapter();
   let h = `<div class="kick">Kapitel ${c.n}${c.soon ? ' · bald verfügbar' : ''}</div><h3>${esc(c.title)}</h3><canvas class="route"></canvas><ul class="checks">`;

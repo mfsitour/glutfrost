@@ -88,7 +88,7 @@ function drawGround(t) {
     ctx.setLineDash([9, 7]); ctx.strokeStyle = p.cur === 'iron' ? '#dfe6ec' : '#ffffff'; ctx.lineWidth = 3;
     ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(p.x - 30, p.y - 28, 60, 56, 10); else ctx.rect(p.x - 30, p.y - 28, 60, 56); ctx.stroke(); ctx.setLineDash([]);
   }
-  drawCh3Ground(t);
+  drawCh3Ground(t); kitGround(t);
   // Yeti-Angriffe
   for (const c of casts) {
     const k = 1 - c.t / c.T;
@@ -173,7 +173,7 @@ function draw(now) {
     drawStack(n.x - 4 * n.face, n.y - 6, n.stack, 30);
   });
   addFigures(add, t);
-  addCh3(add, t);
+  addCh3(add, t); kitAdd(add, t);
   // Spieler
   if (player.dead <= 0) {
     add(player.y, () => {
@@ -208,7 +208,7 @@ function draw(now) {
   drawHUD(t);
 }
 
-const SYM = { cash: '$', iron: '⛓', stone: '🪨', wood: '🪵', crystal: '🔶' };
+const SYM = { cash: '$', iron: '⛓', stone: '🪨', wood: '🪵', crystal: '🔶', tools: '🔨', cloth: '🧶' };
 function drawOverlays(t) {
   screenT();
   drawNight(); screenT();
@@ -257,6 +257,7 @@ function drawOverlays(t) {
       txt(String(s.want - s.got), x + w - 13 * sc, y + h / 2, 14 * sc, '#333', 'center', null);
     }
   }
+  kitOverlay(t);
   drawFigureUI(t);
   // Schwebende Texte
   for (const f of texts) { const pp = P(f.x, f.y, f.z); ctx.globalAlpha = clamp(f.life * 2, 0, 1); txt(f.s, pp[0], pp[1], f.size * clamp(Z * 1.2, .8, 1.3), f.col); }
@@ -283,7 +284,7 @@ function drawOverlays(t) {
     }
   }
   // Schneefall
-  const bl = blizzard(), n = bl ? 260 : 70;
+  const bl = blizzard(), n = Math.min(flakes.length, Math.round((bl ? 260 : 70) * (S.finale ? .35 : 1))); // nach dem Finale schneit es kaum noch
   if (bl) { ctx.fillStyle = 'rgba(225,238,250,.33)'; ctx.fillRect(0, 0, W, H); }
   ctx.fillStyle = 'rgba(255,255,255,.9)';
   for (let i = 0; i < n; i++) {
@@ -328,6 +329,8 @@ function drawHUD(t) {
   if (S.own.mine || S.iron > 0) { pill(x, y, pw, 'iron', S.iron, '#e6edf2'); y += 40; }
   if (S.own.settle || S.stone > 0) { pill(x, y, pw, 'stone', S.stone, '#e6edf2'); y += 40; }
   if (S.own.lake || S.crystal > 0) { pill(x, y, pw, 'crystal', S.crystal, '#ffc27a'); y += 40; }
+  if (S.own.ore || S.tools > 0) { pill(x, y, pw, 'tools', S.tools, '#ffe7b0'); y += 40; }
+  if (S.own.weite || S.cloth > 0) { pill(x, y, pw, 'cloth', S.cloth, '#ffe7b0'); y += 40; }
   const n = player.stack.length, c = cap();
   rr(x, y, pw, 34, 17, 'rgba(25,35,50,.55)');
   txt('🎒', x + 20, y + 17, 16, '#fff', 'center', null);
@@ -361,7 +364,7 @@ function drawHUD(t) {
     const dx = joy.x - joy.ox, dy = joy.y - joy.oy, l = Math.hypot(dx, dy), m = Math.min(l, 55);
     ctx.globalAlpha = .8; ell(joy.ox + (l ? dx / l * m : 0), joy.oy + (l ? dy / l * m : 0), 24, 24, '#ffffff'); ctx.globalAlpha = 1;
   }
-  drawCh3HUD(top);
+  drawCh3HUD(top); kitHUD(top);
   drawToasts(top);
   // Banner
   if (banner) {

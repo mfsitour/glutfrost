@@ -5,7 +5,7 @@
 // =====================================================================
 let paused = false;
 const $ = id => document.getElementById(id);
-function show(id, on) { $(id).classList.toggle('hidden', !on); paused = ['menu', 'help', 'confirm', 'offline', 'diary', 'chapter'].some(k => !$(k).classList.contains('hidden')); }
+function show(id, on) { $(id).classList.toggle('hidden', !on); paused = ['menu', 'help', 'confirm', 'offline', 'diary', 'chapter', 'credits', 'ngConfirm'].some(k => !$(k).classList.contains('hidden')); }
 function toggleMenu() { show('menu', $('menu').classList.contains('hidden')); }
 $('menuBtn').onclick = () => show('menu', true);
 $('bResume').onclick = () => show('menu', false);
@@ -29,7 +29,7 @@ function offlineRate() {
     r += meat * meatPrice() + coal * (2 + S.lv.furnace);
   }
   if (S.own.fisher && S.own.seller && S.own.stall) r += .5 * fishPrice();
-  return r;
+  return r * priceMul();
 }
 let offlineGain = 0;
 function checkOffline() {

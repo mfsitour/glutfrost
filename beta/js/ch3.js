@@ -28,7 +28,7 @@ if (dayOn() && phase() >= DUSK) S.dayT += DAY_LEN - phase();
 //  WÖLFE
 // =====================================================================
 let wolves = [], wbolts = [], boss = null, nightRun = null, ammoT = 0, wTowerT = [0, 0], wAim = [-1.57, -1.57];
-const wolfHp = () => 8 + 3 * Math.min(8, S.nightNo);
+let wolfHp = () => 8 + 3 * Math.min(8, S.nightNo);
 function spawnWolf(kind, x, y) {
   const shadow = Math.random() < (kind === 'atk' ? .12 : .05);
   const w = { kind, x, y, hp: wolfHp() * (shadow ? 1.5 : 1), max: 0, hitCd: 0, flash: 0, anim: rand(0, 6), face: 1, vx: 0, vy: 0, wt: 0, aggro: 0, bite: 0, shadow, path: [], state: 'come', loot: 0 };
@@ -464,7 +464,7 @@ function drawAmmo() {
 // Nacht: dunkle Schicht mit Lichtkreisen um Ofen, Feuer, Türme und Spieler
 let nightCv = null;
 function drawNight() {
-  const k = darkness(); if (k <= 0) return;
+  const k = Math.max(darkness(), typeof caveDark === 'function' ? caveDark() : 0); if (k <= 0) return;
   if (!nightCv) nightCv = document.createElement('canvas');
   if (nightCv.width !== cv.width || nightCv.height !== cv.height) { nightCv.width = cv.width; nightCv.height = cv.height; }
   const g = nightCv.getContext('2d');
@@ -481,6 +481,7 @@ function drawNight() {
   if (S.own.settle) light(BRAZ.x, BRAZ.y, 180);
   light(YFIRE.x, YFIRE.y, 150);
   WATCH.forEach((w, i) => { if (S.own[i ? 'watch2' : 'watch1']) light(w.x, w.y, 130); });
+  for (const w of KIT.warm) if (w.on() && onScreen(w.x, w.y, 400)) light(w.x, w.y, Math.min(caveDark() > 0 ? 170 : 260, w.r));
   screenT(); ctx.drawImage(nightCv, 0, 0, W, H);
   // Leuchtende Wolfsaugen
   if (k > .4) for (const w of wolves) { const p = P(w.x + 24 * w.face, w.y, 26); ell(p[0], p[1], 2.2 * Z, 2 * Z, 'rgba(255,215,90,.9)'); }

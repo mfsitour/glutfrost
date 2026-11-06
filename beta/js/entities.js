@@ -103,9 +103,9 @@ const PADS = [
   { id: 'coalCt', x: COAL_CT.zx, y: COAL_CT.zy, ic: '⚫', name: () => 'Kohle-Theke', cost: () => S.own.coalCt ? null : 40, vis: () => S.own.kiln, buy: () => S.own.coalCt = 1 },
   {
     id: 'furnace', x: 155, y: 170, ic: '🔥', name: () => 'Ofen Stufe ' + (S.lv.furnace + 1),
-    req: () => { const l = S.lv.furnace; return l < 5 ? { cash: [120, 360, 900, 1800][l - 1] } : l < 8 ? { cash: [9000, 18000, 28000][l - 5], crystal: [15, 30, 40][l - 5] } : null; },
-    // Höchststufe je Kapitel: K2 bis 5, K3 bis 7, danach 8
-    vis: () => S.own.tower && (S.lv.furnace < 5 || S.own.lake) && S.lv.furnace < (S.ch >= 4 ? 8 : S.ch >= 3 ? 7 : 5),
+    req: () => furnReq(S.lv.furnace),
+    // Höchststufe je Kapitel: bis K2 5, K3 7, K4 9, K5 12, K6 15, nach dem Finale endlos
+    vis: () => S.own.tower && (S.lv.furnace < 5 || S.own.lake) && S.lv.furnace < furnCap(),
     buy: () => {
       S.lv.furnace++;
       if (S.lv.furnace >= 5 && !S.won) S.won = 1; // Kapitelabschluss übernimmt jetzt die Kampagne
@@ -154,6 +154,20 @@ const PAD_TXT = {
   seller: ['Füllt den Marktstand', 'Der Marktstand wird jetzt automatisch befüllt.'],
 };
 for (const p of PADS) { const t = PAD_TXT[p.id]; if (t) { p.desc = t[0]; if (t[1]) p.info = () => t[1]; } }
+function furnCap() { return S.finale ? 999 : [5, 5, 5, 7, 9, 12, 15, 15][Math.min(7, S.ch)]; }
+// Kosten der nächsten Ofenstufe (l = aktuelle Stufe)
+function furnReq(l) {
+  if (l < 5) return { cash: [120, 360, 900, 1800][l - 1] };
+  const T = {
+    5: { cash: 9000, crystal: 15 }, 6: { cash: 18000, crystal: 30 },
+    7: { cash: 24000, crystal: 30, tools: 60 }, 8: { cash: 32000, crystal: 40, tools: 120 },
+    9: { cash: 60000, tools: 40, cloth: 20 }, 10: { cash: 85000, tools: 50, cloth: 40 }, 11: { cash: 120000, tools: 60, cloth: 60 },
+    12: { cash: 160000, crystal: 40, tools: 150, cloth: 150 }, 13: { cash: 210000, crystal: 55, tools: 250, cloth: 250 }, 14: { cash: 280000, crystal: 70, tools: 350, cloth: 350 },
+  };
+  if (T[l]) return T[l];
+  const k = l - 14; // Frostnächte: endlos weiter
+  return { cash: Math.round(280000 * Math.pow(1.3, k) / 1000) * 1000, crystal: 100 + 20 * k, tools: 100 + 20 * k, cloth: 100 + 20 * k };
+}
 // Kosten: entweder cost() + cur (eine Währung) oder req() mit mehreren Ressourcen.
 // Holz kommt aus dem Rucksack, alles andere sind Vorräte (Geld, Eisen, Stein, Kristalle).
 function reqOf(p) { if (p.req) return p.req(); const c = p.cost(); return c == null ? null : { [p.cur || 'cash']: c }; }

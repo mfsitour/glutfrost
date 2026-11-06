@@ -72,6 +72,7 @@ function swing(owner, nAxes, damage, src, npc, dt) {
   if (z === 'settle' && S.own.settle) hitAll(stones, 22, 'stone');
   if (z === 'lake' && S.own.lake) hitAll(crystals, 24, 'crystal');
   if (src === 'player' && swingWolves(near, cd, damage, dt)) hitSomething = true;
+  if (src === 'player' && kitSwing(near, cd, damage, dt, z)) hitSomething = true;
   return hitSomething;
 }
 
@@ -87,7 +88,7 @@ function solids() {
   if (S.own.smoke) a.push(SMOKE);
   if (S.lv.store) a.push(STORE);
   for (const h of homes()) a.push({ x: h.x, y: h.y, r: 26 });
-  ch3Solids(a);
+  ch3Solids(a); kitSolids(a);
   return a;
 }
 function moveCircle(e, dx, dy, r) {
@@ -166,7 +167,7 @@ function update(dt) {
   // ---------- Spieler ----------
   if (player.dead > 0) {
     player.dead -= dt;
-    if (player.dead <= 0) { player.x = 0; player.y = 120; player.hp = 100; player.warm = 100; }
+    if (player.dead <= 0) { player.dead = 0; player.x = 0; player.y = 120; player.hp = 100; player.warm = 100; } // genau 0, sonst gilt man als „tot“ (Rundungsrest)
   } else {
     const [ix, iy] = inputVec();
     const cold = player.warm <= 0 ? .6 : 1;
@@ -183,9 +184,10 @@ function update(dt) {
     const dF = dist(player.x, player.y, FURN.x, FURN.y);
     const inCamp = inHexPt(player.x, player.y, HR);
     if (dF < heatR() || inCamp || nearBraz()) player.warm = Math.min(100, player.warm + 22 * dt);
-    else player.warm = Math.max(0, player.warm - (blizzard() ? 7 : 2.2) * (1 - .22 * S.lv.coat) * dt);
+    else player.warm = Math.max(0, player.warm - (blizzard() ? 7 : 2.2) * (1 - .22 * S.lv.coat) * (1 - gearV('cold')) * coldMul() * dt);
     if (player.warm <= 0) { player.hp -= 6 * dt; if (Math.random() < dt * 2) ftext(player.x, player.y, 70, 'Kalt!', '#9fd8ff', 16); }
     if (inCamp) player.hp = Math.min(100, player.hp + 14 * dt);
+    else if (nearWarm()) player.hp = Math.min(100, player.hp + 5 * dt); // an Feuern und Öfen draußen heilt man langsam
     player.hurtT -= dt;
     if (player.hp <= 0) {
       player.dead = 2.2; emit('deaths', 1, false); burst(player.x, player.y, 30, '#9fd8ff', 24, 200, 5);
@@ -215,7 +217,7 @@ function update(dt) {
 
   // ---------- Eislöcher (Angeln) ----------
   playerHole = null;
-  if (S.own.lake && !player.dead && zoneOf(player.x, player.y) === 'lake') {
+  if (S.own.lake && !(player.dead > 0) && zoneOf(player.x, player.y) === 'lake') {
     let bd = 52;
     for (const h of holes) { if (h.cd > 0) continue; const d = dist(h.x, h.y, player.x, player.y); if (d < bd) { bd = d; playerHole = h; } }
   }
@@ -255,7 +257,7 @@ function update(dt) {
   for (let i = conv.length - 1; i >= 0; i--) { conv[i].d += 85 * dt; if (conv[i].d >= convLen) { conv.splice(i, 1); S.grillIn++; } }
 
   // ---------- Bären ----------
-  const pInField = zoneOf(player.x, player.y) === 'field' && !player.dead;
+  const pInField = zoneOf(player.x, player.y) === 'field' && !(player.dead > 0);
   for (const b of bears) {
     if (b.flash > 0) b.flash -= dt;
     if (b.dead) { b.dead -= dt; if (b.dead <= 0) spawnBear(b); continue; }
@@ -289,7 +291,7 @@ function update(dt) {
       casts.splice(i, 1); snd('boom'); if (c.cb) c.cb(c);
       if (!c.wolf) for (let k = 0; k < 9; k++) { const a = rand(0, TAU), rr2 = rand(0, c.r * .8); shards.push({ x: c.x + Math.cos(a) * rr2, y: c.y + Math.sin(a) * rr2, h: rand(20, 46), life: 1.1, rot: rand(-.4, .4) }); }
       burst(c.x, c.y, 10, c.wolf ? '#ffffff' : '#b47cff', 18, 200, 5);
-      if (!player.dead && dist(player.x, player.y, c.x, c.y) < c.r) hurtPlayer(c.dmg || 22, true);
+      if (!(player.dead > 0) && dist(player.x, player.y, c.x, c.y) < c.r) hurtPlayer(c.dmg || 22, true);
       if (dist(player.x, player.y, c.x, c.y) < 400) shake = Math.max(shake, 7);
     }
   }
@@ -306,8 +308,8 @@ function update(dt) {
     const d = drops[i]; d.age += dt;
     if (d.z > 0 || d.vz > 0) { d.vz -= 700 * dt; d.z += d.vz * dt; d.x += d.vx * dt; d.y += d.vy * dt; if (d.z <= 0) { d.z = 0; d.vz = 0; d.vx = d.vy = 0; } }
     if (d.age > 70) { drops.splice(i, 1); continue; }
-    if (player.dead || d.age < .45) continue;
-    const isCur = CURR[d.type] || d.type === 'find';
+    if (player.dead > 0 || d.age < .45) continue;
+    const isCur = CURR[d.type] || d.type === 'find' || d.type === 'gearbox';
     if (!isCur && player.stack.length >= cap()) { if (S.time - (player.fullMsg || 0) > 2.5 && dist(d.x, d.y, player.x, player.y) < 90) { player.fullMsg = S.time; ftext(player.x, player.y, 90, 'Voll!', '#ffb35c', 18); } continue; }
     const dd = dist(d.x, d.y, player.x, player.y);
     if (dd < 95) {
@@ -317,6 +319,7 @@ function update(dt) {
         drops.splice(i, 1);
         if (d.type === 'cash') { S.cash += d.v; snd('coin'); }
         else if (d.type === 'find') pickFind(d);
+        else if (d.type === 'gearbox') pickGearbox(d);
         else if (isCur) { S[d.type] += 1; emit(d.type); snd(d.type === 'crystal' ? 'gem' : 'pick'); ftext(player.x, player.y, 60, '+1 ' + CURR[d.type], d.type === 'crystal' ? '#ffc27a' : '#dfe6ec', 15); }
         else { player.stack.push(d.type); snd('pick'); }
       }
@@ -334,7 +337,7 @@ function update(dt) {
   if (S.own.forest && S.time >= S.nextBliz + 28) { S.nextBliz += 150; emit('bliz', 1, false); }
 
   // ---------- Kampagne & Langzeitmotivation ----------
-  updateChapter(dt); updateQuests(dt); checkAch(dt); updateCh3(dt);
+  updateChapter(dt); updateQuests(dt); checkAch(dt); updateCh3(dt); kitUpdate(dt);
   if (blizWarn() && !banner && S.time - (S._warned || 0) > 20) { S._warned = S.time; snd('warn'); banner = { t: 4, a: '❄️ Schneesturm zieht auf!', b: 'Draußen wird es eiskalt – Kohle zahlt jetzt doppelt.' }; }
   if (banner) { banner.t -= dt; if (banner.t <= 0) banner = null; }
 
@@ -346,8 +349,8 @@ function update(dt) {
   saveT -= dt; if (saveT <= 0) { saveT = 4; save(); }
 }
 
-const CURR = { cash: 'Geld', iron: 'Eisen', stone: 'Stein', crystal: 'Kristall' }; // Vorräte, nicht im Rucksack
-const nearBraz = () => (S.own.settle && dist(player.x, player.y, BRAZ.x, BRAZ.y) < brazR()) || (S.own.pass && dist(player.x, player.y, YFIRE.x, YFIRE.y) < 260);
+const CURR = { cash: 'Geld', iron: 'Eisen', stone: 'Stein', crystal: 'Kristall', tools: 'Werkzeug', cloth: 'Kleidung' }; // Vorräte, nicht im Rucksack
+const nearBraz = () => (S.own.settle && dist(player.x, player.y, BRAZ.x, BRAZ.y) < brazR()) || (S.own.pass && dist(player.x, player.y, YFIRE.x, YFIRE.y) < 260) || nearWarm();
 function splash(h) {
   snd('splash'); burst(h.x, h.y, 4, '#7fc4ee', 10, 120, 4); burst(h.x, h.y, 4, '#ffffff', 6, 90, 3);
 }
@@ -370,6 +373,7 @@ function doTransfers() {
   };
   if (questTransfer(give)) return true;
   if (ammoTransfer(give)) return true;
+  if (machineTransfer(give, st, full)) return true;
   if (near(GRILL_IN) && give('raw', GRILL_IN, () => S.grillIn++)) return true;
   if (near(GRILL_OUT) && !full && S.grillOut > 0) { S.grillOut--; st.push('cooked'); snd('pick'); return true; }
   if (near({ x: MEAT_CT.zx, y: MEAT_CT.zy }, 42) && S.meatCt < 60 && give('cooked', MEAT_CT, () => S.meatCt++)) return true;
@@ -424,7 +428,7 @@ function updateYeti(dt) {
   const y = yeti;
   if (y.flash > 0) y.flash -= dt;
   if (y.dead) { y.dead -= dt; if (y.dead <= 0) spawnYeti(); return; }
-  const pz = zoneOf(player.x, player.y) === 'forest' && !player.dead;
+  const pz = zoneOf(player.x, player.y) === 'forest' && !(player.dead > 0);
   const d = dist(y.x, y.y, player.x, player.y);
   let tx = 820, ty = -150, sp = 55;
   if (pz && d < 430) { tx = player.x; ty = player.y; sp = 62; }
@@ -576,7 +580,7 @@ function updateQueue(q, dt) {
           fly(q.item, q.ct.x + rand(-20, 20), q.ct.y, 26, s.x, s.y, 30, .2);
         }
         if (s.got >= s.want) {
-          const amount = Math.round(s.want * q.price() * (q.item === 'cooked' ? bookMul('animals') : q.item === 'smoked' ? bookMul('fish') : 1));
+          const amount = Math.round(s.want * q.price() * (q.item === 'cooked' ? bookMul('animals') : q.item === 'smoked' ? bookMul('fish') : 1) * gearMul('cash') * (1 + .1 * glutLv('cash')) * salesMul() * priceMul() * (bookMul('heart') > 1 ? 1.05 : 1));
           s.state = 'leave'; s.lx = q.ct.x + rand(-40, 40);
           S.sold += s.want; emit('served'); emit({ cooked: 'meatSold', coal: 'coalSold', smoked: 'fishSold' }[q.item], s.want, false); emit('earned', amount, false);
           const bills = Math.min(8, amount);

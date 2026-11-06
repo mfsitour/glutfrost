@@ -3,11 +3,11 @@
 // Neue Dateien müssen in FILES eingetragen werden, sonst fehlen sie offline.
 const BETA = self.registration.scope.includes('/beta/');
 const PREFIX = BETA ? 'glutfrost-beta-' : 'glutfrost-';
-const VERSION = PREFIX + 'v7';
+const VERSION = PREFIX + 'v8';
 const FILES = [
   './', 'index.html', 'manifest.json',
   'js/core.js', 'js/state.js', 'js/world.js', 'js/entities.js', 'js/input.js', 'js/logic.js', 'js/hint.js',
-  'js/draw-objects.js', 'js/draw-scene.js', 'js/menu.js', 'js/story.js', 'js/meta.js', 'js/ch3.js', 'js/main.js',
+  'js/draw-objects.js', 'js/draw-scene.js', 'js/menu.js', 'js/story.js', 'js/meta.js', 'js/ch3.js', 'js/kit.js', 'js/gear.js', 'js/ch4.js', 'js/ch5.js', 'js/ch6.js', 'js/endgame.js', 'js/main.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
 ];
 // Nur eigene alte Caches löschen: Live und Beta teilen sich die Domain
