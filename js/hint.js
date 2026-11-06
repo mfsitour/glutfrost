@@ -28,16 +28,18 @@ function siteFor(k) {
   }
   return b;
 }
+// Alles gerade abgebaut? Dann zu dem, das als Nächstes nachwächst (statt wegzulaufen)
+function soonest(list) { let b = null; for (const o of list) if (!b || o.stump < b.stump) b = o; return b; }
 // Was fehlt für die nächste Baustelle, deren Geld schon reicht?
 function matNeed() {
   let best = null;
   for (const p of PADS) {
-    if (!padActive(p)) continue;
+    if (!padActive(p) || (p.optional && p.optional())) continue;
     const rm = remOf(p);
     if ((rm.cash || 0) > allCash()) continue;
     let miss = null;
     if (rm.wood > 0) miss = 'wood';
-    else for (const k of ['stone', 'crystal', 'iron']) if (rm[k] > (S[k] || 0)) { miss = k; break; }
+    else for (const k of ['stone', 'crystal', 'iron', 'tools', 'cloth']) if (rm[k] > (S[k] || 0)) { miss = k; break; }
     if (!miss) continue;
     if (miss === 'crystal' && !S.own.lake) continue;
     if (miss === 'iron' && !S.own.mine) continue;
@@ -51,24 +53,57 @@ function matNeed() {
     return t && { x: t.x, y: t.y, t: 'Fälle Bäume – Holz für: ' + p.name() + ' 🪵', soft: 1 };
   }
   if (best.miss === 'stone') {
-    const s = nearZ(stones, 'settle', o => !o.stump);
+    const s = nearZ(stones, 'settle', o => !o.stump) || soonest(stones);
     return s && { x: s.x, y: s.y, t: 'Brich Steine – für: ' + p.name() + ' 🪨', soft: 1 };
   }
+  if (best.miss === 'tools' || best.miss === 'cloth') return kitMatHint(best.miss, p);
   if (best.miss === 'crystal') {
-    const c = nearZ(crystals, 'lake', o => !o.stump);
+    const hc = typeof heartCrystalHint === 'function' ? heartCrystalHint() : null; if (hc) return hc;
+    const c = nearZ(crystals, 'lake', o => !o.stump) || soonest(crystals);
     return c ? { x: c.x, y: c.y, t: 'Schlag Feuerkristalle im Eissee 🔶', soft: 1 } : null;
   }
-  const r = nearZ(rocks, 'iron', o => !o.stump);
+  const r = nearZ(rocks, 'iron', o => !o.stump) || soonest(rocks);
   return r && { x: r.x, y: r.y, t: 'Baue Eisenerz in der Mine ab ⛏️', soft: 1 };
 }
-function hint() {
+// Billigstes Bau-Feld, das man sich gerade leisten kann
+function bestBuy(st) {
+  let best = null;
+  for (const p of PADS) {
+    if (!padActive(p) || (p.optional && p.optional())) continue;
+    const rm = remOf(p); let ok = true, tot = 0;
+    for (const k in rm) {
+      if (!rm[k]) continue;
+      const have = k === 'cash' ? allCash() : k === 'wood' ? countOf(st, 'wood') : (S[k] || 0);
+      if (have < rm[k]) { ok = false; break; }
+      tot += k === 'cash' ? rm[k] : rm[k] * 10;
+    }
+    if (ok && (!best || tot < best.rem)) best = { p, rem: tot };
+  }
+  return best;
+}
+function northGoal(st) {
+  if (st.length >= cap()) return null;
+  const b = bestBuy(st);
+  if (b && (remOf(b.p).cash || 0) <= S.cash && b.p.y < -800) return { x: b.p.x, y: b.p.y, t: 'Kaufen: ' + b.p.name() };
+  const bh = bossHint(st) || kitBossHint(st); if (bh) return bh;
+  return null;
+}
+function hintRaw() {
   const st = player.stack;
   if (player.dead > 0) return null;
   if (player.warm < 30 && !inHexPt(player.x, player.y, HR) && !nearBraz()) {
-    const toB = S.own.settle && dist(player.x, player.y, BRAZ.x, BRAZ.y) < dist(player.x, player.y, FURN.x, FURN.y);
-    return toB ? { x: BRAZ.x, y: BRAZ.y + 50, t: 'Dir ist kalt! Ab ans Lagerfeuer 🔥' } : { x: FURN.x, y: FURN.y + 60, t: 'Dir ist kalt! Zurück zum Ofen 🔥' };
+    // nächste Wärmequelle: Ofen, Lagerfeuer der Siedlung, Ylvas Feuer, Schmelzofen, Jurte …
+    const fires = [{ x: FURN.x, y: FURN.y + 60, t: 'Dir ist kalt! Zurück zum Ofen 🔥' }];
+    if (S.own.settle) fires.push({ x: BRAZ.x, y: BRAZ.y + 50, t: 'Dir ist kalt! Ab ans Lagerfeuer 🔥' });
+    if (S.own.pass) fires.push({ x: YFIRE.x, y: YFIRE.y + 50, t: 'Dir ist kalt! Ab an Ylvas Feuer 🔥' });
+    for (const w of KIT.warm) if (w.on()) fires.push({ x: w.x, y: w.y + 60, t: 'Dir ist kalt! Ab ans Feuer 🔥' });
+    return fires.reduce((a, b) => dist(a.x, a.y, player.x, player.y) < dist(b.x, b.y, player.x, player.y) ? a : b);
   }
+  const nh = ch3Hint(st); if (nh) return nh;
+  const kh = runAll(KIT.hintEarly, st); if (kh) return kh;
   const qh = questHint(st); if (qh) return qh;
+  // Auf dem Weg nach Norden (Pass/Höhle) unterwegs erbeutetes Fleisch nicht zurückbringen, sonst kommt man nie an
+  const north = northGoal(st); if (north) return north;
   if (st.includes('raw')) return { ...GRILL_IN, t: 'Bring das rohe Fleisch zum Ofen' };
   if (st.includes('cooked')) return { x: MEAT_CT.zx, y: MEAT_CT.zy, t: 'Bediene die Überlebenden an der Theke' };
   if (st.includes('smoked') && S.own.stall) return { x: STALL.zx, y: STALL.zy, t: 'Verkaufe den Räucherfisch am Marktstand' };
@@ -78,6 +113,8 @@ function hint() {
     if (nf >= Math.min(cap(), 8) || st.length >= cap() || !h || nf < st.length || dist(player.x, player.y, FISH_IN.x, FISH_IN.y) < 90) return { ...FISH_IN, t: 'Bring den Fisch zur Räucherei' };
     return { x: h.x, y: h.y, t: 'Angle weiter – ' + nf + ' Fische 🎣', soft: 1 };
   }
+  const ah = ammoHint(st); if (ah) return ah;
+  const mh = machineHint(st) || runAll(KIT.hintMid, st); if (mh) return mh;
   if (st.includes('wood')) {
     const site = siteFor('wood');
     if (site) {
@@ -92,7 +129,7 @@ function hint() {
   // Kaufbares Bau-Feld?
   let best = null;
   for (const p of PADS) {
-    if (!padActive(p)) continue;
+    if (!padActive(p) || (p.optional && p.optional())) continue;
     const rm = remOf(p); let ok = true, tot = 0;
     for (const k in rm) {
       if (!rm[k]) continue;
@@ -108,7 +145,7 @@ function hint() {
   const pileHint = pile && { x: pile[0].x, y: pile[0].y, t: 'Sammle dein Geld ein' };
   // Geld holen nur, wenn es gebraucht wird, nah liegt oder sich lohnt – sonst pendelt man ständig zurück
   const needCash = best && (remOf(best.p).cash || 0) > S.cash;
-  if (pile && (needCash || S.cash < 5 || (pileSum >= 10 && dist(pile[0].x, pile[0].y, player.x, player.y) < 320) || pileSum >= 400)) return pileHint;
+  if (pile && (needCash || S.cash < 5 || (pile[1] >= Math.max(10, S.cash * .05) && dist(pile[0].x, pile[0].y, player.x, player.y) < 320) || (pileSum >= 400 && pileSum > S.cash * .5))) return pileHint;
   if (best) return { x: best.p.x, y: best.p.y, t: 'Kaufen: ' + best.p.name() };
   const hasServer = npcs.some(n => n.kind === 'server');
   const wantM = queues.meat.list.some(s => s.state !== 'leave') && S.meatCt < 6;
@@ -123,9 +160,13 @@ function hint() {
   if (S.own.lake && S.own.stall && !npcs.some(n => n.kind === 'fisher') && st.length === 0 && S.fishIn + S.smokeOut + S.stallCt < 12) {
     const h = readyHole(); if (h) return { x: h.x, y: h.y, t: 'Angle Fische im Eissee 🎣', soft: 1 };
   }
+  const bh = bossHint(st) || kitBossHint(st) || runAll(KIT.hintLate, st); if (bh) return bh;
   const oh = offerHint(); if (oh) return oh;
   if (pile) return pileHint;
   const bb = nearZ(bears, 'field', b => !b.dead);
   if (bb) return { x: bb.x, y: bb.y, t: 'Jage Eisbären im Norden 🐻‍❄️', soft: 1 };
   return null;
 }
+
+// Hinweis-Pfeil, bei weiten Wegen über den Schlitten (ab Kapitel 5)
+function hint() { const h = hintRaw(); return h && typeof sledHint === 'function' ? sledHint(h) : h; }

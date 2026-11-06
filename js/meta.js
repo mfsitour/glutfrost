@@ -6,7 +6,7 @@
 // emit() ist die eine Stelle, an der das Spiel meldet, was passiert ist.
 // own = vom Spieler selbst (nicht von Helfern oder dem Turm).
 function emit(k, n = 1, own = true) {
-  S.st[k] = (S.st[k] || 0) + n;
+  S.st[k] = (S.st[k] || 0) + n; S.run[k] = (S.run[k] || 0) + n;
   if (own) questEvent(k, n);
 }
 const stv = k => S.st[k] || 0;
@@ -100,6 +100,8 @@ const FINDS = [
   { id: 'splitter', n: 'Glutsplitter', ic: '🔥', src: 'crystal', p: .12, d: 'Warm wie eine Hand. Mara sagt: ein Stück vom Glutherz.' },
   { id: 'blatt', n: 'Tagebuchblatt', ic: '📜', src: 'yeti', p: .6, d: '»… hinter dem Pass, wo die Wölfe heulen, beginnt der Weg zum Glutherz …«' },
 ];
+const EXTRA_FINDS = []; // Fundstücke späterer Kapitel (stehen auf deren eigener Sammelbuch-Seite)
+const allFinds = () => FINDS.concat(EXTRA_FINDS);
 const BOOK = [
   { id: 'animals', n: 'Tiere der Ebene', bonus: '+5 % Fleischpreis', e: [
     { id: 'bear', n: 'Eisbär', ic: '🐻‍❄️', d: 'Streift durch das Eisfeld im Norden. Liefert Fleisch.' },
@@ -129,12 +131,12 @@ function discover(id) {
 }
 // Fundstücke: seltene, einmalige Drops bei bestimmten Tätigkeiten
 function rollFind(src, x, y) {
-  for (const f of FINDS) {
+  for (const f of allFinds()) {
     if (f.src !== src || has(f.id) || drops.some(d => d.fid === f.id)) continue;
     if (Math.random() < f.p) { drops.push({ type: 'find', fid: f.id, v: 1, x, y, z: 18, vx: rand(-80, 80), vy: rand(-80, 80), vz: 260, age: 0 }); return; }
   }
 }
-function pickFind(d) { const f = FINDS.find(x => x.id === d.fid); if (discover(d.fid)) { snd('gem'); ftext(player.x, player.y, 70, f.ic + ' ' + f.n, '#ffe27a', 17); } }
+function pickFind(d) { const f = allFinds().find(x => x.id === d.fid); if (discover(d.fid)) { snd('gem'); ftext(player.x, player.y, 70, f.ic + ' ' + f.n, '#ffe27a', 17); } }
 function catchFish() { // Art eines gefangenen Fisches auswürfeln
   let r = Math.random(), sp = FISH_SP[0];
   for (const f of FISH_SP) { if (r < f.p) { sp = f; break; } r -= f.p; }
@@ -177,13 +179,11 @@ function updateDiaryDot() { $('diaryDot').classList.toggle('hidden', !S.diaryNew
 function renderDiary() {
   for (const b of document.querySelectorAll('#diaryTabs button')) b.classList.toggle('on', b.dataset.tab === diaryTab);
   const el = $('diaryBody');
-  if (diaryTab === 'goals') el.innerHTML = goalsHTML();
-  else if (diaryTab === 'ach') el.innerHTML = achHTML();
-  else if (diaryTab === 'book') el.innerHTML = bookHTML();
-  else el.innerHTML = statsHTML();
+  el.innerHTML = DIARY[diaryTab]();
   const c = el.querySelector('canvas.route'); if (c) drawRoute(c, S.ch);
   el.scrollTop = 0;
 }
+const DIARY = { goals: () => goalsHTML(), ach: () => achHTML(), book: () => bookHTML(), stats: () => statsHTML(), gear: () => gearHTML(), glut: () => glutHTML() };
 function goalsHTML() {
   const c = curChapter();
   let h = `<div class="kick">Kapitel ${c.n}${c.soon ? ' · bald verfügbar' : ''}</div><h3>${esc(c.title)}</h3><canvas class="route"></canvas><ul class="checks">`;

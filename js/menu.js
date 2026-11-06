@@ -5,7 +5,7 @@
 // =====================================================================
 let paused = false;
 const $ = id => document.getElementById(id);
-function show(id, on) { $(id).classList.toggle('hidden', !on); paused = ['menu', 'help', 'confirm', 'offline', 'diary', 'chapter'].some(k => !$(k).classList.contains('hidden')); }
+function show(id, on) { $(id).classList.toggle('hidden', !on); paused = ['menu', 'help', 'confirm', 'offline', 'diary', 'chapter', 'credits', 'ngConfirm'].some(k => !$(k).classList.contains('hidden')); }
 function toggleMenu() { show('menu', $('menu').classList.contains('hidden')); }
 $('menuBtn').onclick = () => show('menu', true);
 $('bResume').onclick = () => show('menu', false);
@@ -13,6 +13,8 @@ $('bHelp').onclick = () => { show('menu', false); show('help', true); };
 $('bHelpOk').onclick = () => { show('help', false); S.helpSeen = 1; save(); };
 $('bMute').onclick = () => { S.muted = S.muted ? 0 : 1; $('bMute').textContent = 'Ton: ' + (S.muted ? 'aus' : 'an'); save(); };
 $('bMute').textContent = 'Ton: ' + (S.muted ? 'aus' : 'an');
+$('bMusic').onclick = () => { S.music = S.music ? 0 : 1; $('bMusic').textContent = 'Musik: ' + (S.music ? 'an' : 'aus'); save(); };
+$('bMusic').textContent = 'Musik: ' + (S.music ? 'an' : 'aus');
 $('bReset').onclick = () => { show('menu', false); show('confirm', true); };
 $('bNo').onclick = () => show('confirm', false);
 // Beta: leeren Spielstand hinterlegen, sonst würde beim Neuladen wieder der echte Spielstand kopiert
@@ -27,7 +29,7 @@ function offlineRate() {
     r += meat * meatPrice() + coal * (2 + S.lv.furnace);
   }
   if (S.own.fisher && S.own.seller && S.own.stall) r += .5 * fishPrice();
-  return r;
+  return r * priceMul();
 }
 let offlineGain = 0;
 function checkOffline() {

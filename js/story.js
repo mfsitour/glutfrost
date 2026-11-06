@@ -28,9 +28,22 @@ const CHAPTERS = [
     ],
   },
   {
-    n: 3, title: 'Der Wolfspass', soon: true,
-    text: 'Eine Fremde erreicht die Siedlung: Ylva, eine Kundschafterin. Sie bringt Nachricht vom Pass im Norden – und von Wölfen, die nachts näher kommen.',
-    say: 'Der Pass ist noch zugeschneit. Bis er frei ist: Mach den Ofen mit Feuerkristallen so stark, wie es nur geht.',
+    n: 3, title: 'Der Wolfspass',
+    text: 'Eine Fremde erreicht das Lager: Ylva, eine Kundschafterin. Der Pass im Norden ist frei – doch seit sie da ist, heulen nachts die Wölfe. Und sie kommen näher.',
+    say: 'Ylva kennt den Weg nach Norden. Sichere das Lager für die Nächte und vertreib den Rudelführer vom Pass.',
+    goals: [
+      { t: 'Öffne den Wolfspass', ok: () => S.own.pass },
+      { t: 'Baue die Palisade', ok: () => S.own.wall },
+      { t: 'Baue einen Wachturm', ok: () => S.own.watch1 },
+      { get t() { return 'Wehre 5 Nachtangriffe ab (' + Math.min(5, S.nightsOk) + '/5)'; }, ok: () => S.nightsOk >= 5 },
+      { t: 'Ofen auf Stufe 7 bringen', ok: () => S.lv.furnace >= 7 },
+      { t: 'Besiege den Rudelführer', ok: () => S.bossDead },
+    ],
+  },
+  {
+    n: 4, title: 'Die Erzgrube', soon: true,
+    text: 'Auf der zerrissenen Karte des Rudelführers ist eine alte Erzgrube eingezeichnet. Bjarne ist kaum zu halten: Mit echtem Erz könnte er endlich eine richtige Schmiede bauen.',
+    say: 'Bjarne packt schon sein Werkzeug. Bis die Grube erkundet ist: Bring den Ofen auf Stufe 8.',
     goals: [{ t: 'Bonus: Ofen auf Stufe 8', ok: () => S.lv.furnace >= 8 }],
   },
 ];
@@ -184,7 +197,7 @@ function updateQuests(dt) {
     }
     // Annehmen: zur Figur gehen und kurz stehen bleiben
     const d = dist(player.x, player.y, f.x, f.y);
-    f.near = d < 50 && !player.dead ? (f.near || 0) + .25 : 0;
+    f.near = d < 50 && !(player.dead > 0) ? (f.near || 0) + .25 : 0;
     if (S.offers[id] && f.near >= .5) {
       if (S.quests.length >= MAX_QUESTS) { if (!figSay[id]) figSay[id] = { s: 'Du hast schon zwei Aufträge. Erledige erst einen.', t: 3 }; }
       else {
