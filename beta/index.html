@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#e8f0f6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Glutfrost">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Glutfrost</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#e8f0f6;touch-action:none;
+    user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  canvas{display:block;position:fixed;inset:0;width:100vw;height:100vh}
+  #menuBtn{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top));width:44px;height:44px;border-radius:12px;
+    border:none;background:rgba(30,45,60,.55);color:#fff;font-size:22px;cursor:pointer;z-index:5}
+  .ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(20,30,45,.55);z-index:10}
+  .ov.hidden{display:none}
+  .card{background:#fff;border-radius:18px;padding:22px 22px 18px;max-width:360px;width:calc(100% - 64px);
+    box-shadow:0 10px 40px rgba(0,0,0,.3);color:#223}
+  .card h2{margin:0 0 10px;font-size:22px}
+  .card p,.card li{font-size:14px;line-height:1.45;color:#445}
+  .card ul{padding-left:18px;margin:8px 0}
+  .card button{display:block;width:100%;margin-top:10px;padding:12px;border-radius:12px;border:none;font-size:16px;
+    font-weight:700;cursor:pointer;background:#e9eef3;color:#223}
+  .card button.pri{background:#2fb84a;color:#fff}
+  .card button.dan{background:#fbe3e3;color:#a22}
+  #diaryBtn{position:fixed;left:12px;top:calc(64px + env(safe-area-inset-top));width:44px;height:44px;border-radius:12px;
+    border:none;background:rgba(30,45,60,.55);color:#fff;font-size:21px;cursor:pointer;z-index:5}
+  #diaryDot{position:absolute;right:-3px;top:-3px;width:13px;height:13px;border-radius:50%;background:#ff4d4d;border:2px solid #fff}
+  #diaryDot.hidden{display:none}
+  .kick{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#c2621a}
+  canvas.route,#chRoute{display:block;position:static;width:100%;height:150px;border-radius:12px;margin:10px 0}
+  #chapter .card{max-width:400px}
+  #chapter h2{font-size:24px;margin:2px 0 8px}
+  .say{background:#f6efe2;border-radius:12px;padding:10px 12px;font-size:14px;color:#4a3410;margin:8px 0 0}
+  .say b{display:block;font-size:12px;color:#8a5a1c;margin-bottom:2px}
+  #diary .card{max-width:440px;height:min(640px,calc(100% - 80px));display:flex;flex-direction:column;padding:16px 16px 12px}
+  #diaryTabs{display:flex;gap:6px;margin:0 0 10px}
+  #diaryTabs button{flex:1;margin:0;padding:9px 4px;font-size:13px;border-radius:10px}
+  #diaryTabs button.on{background:#2a5d86;color:#fff}
+  #diaryBody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding-right:4px}
+  #diaryBody h3{margin:2px 0 0;font-size:19px} #diaryBody h4{margin:14px 0 4px;font-size:15px}
+  .mut{color:#7a8794;font-size:12px;font-weight:500}
+  .checks{list-style:none;padding:0} .checks li{padding:3px 0;font-weight:600}
+  .checks li.done{color:#2e9a45}
+  .qrow{background:#f2f6f9;border-radius:10px;padding:8px 10px;margin:6px 0;font-size:13px}
+  .qbar{height:8px;background:#dde6ee;border-radius:4px;margin:6px 0 3px;overflow:hidden}
+  .qbar i{display:block;height:100%;background:#3fbf5a}
+  .sum{font-weight:800;margin:0 0 2px}
+  .ach{display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid #eef2f5;font-size:13px;opacity:.55}
+  .ach.done{opacity:1} .ach .ic{font-size:20px} .ach>div{flex:1} .ach .rw{font-size:12px;font-weight:700;color:#a8662a;white-space:nowrap}
+  .bonus{font-size:12px;margin:0 0 6px;color:#7a8794} .bonus.on{color:#2e9a45;font-weight:700}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .ent{background:#f6f2ea;border-radius:10px;padding:8px;font-size:13px;display:flex;flex-direction:column;gap:2px}
+  .ent .ic{font-size:22px} .ent.unk{background:#eef1f4;color:#9aa6b1}
+  table.stats{width:100%;border-collapse:collapse;font-size:14px}
+  table.stats td{padding:6px 4px;border-bottom:1px solid #eef2f5} table.stats td:last-child{text-align:right;font-weight:700}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="menuBtn" aria-label="Menü">☰</button>
+<button id="diaryBtn" aria-label="Tagebuch">📖<span id="diaryDot" class="hidden"></span></button>
+
+<div id="chapter" class="ov hidden"><div class="card">
+  <div class="kick" id="chKick"></div>
+  <h2 id="chTitle"></h2>
+  <p id="chText"></p>
+  <canvas id="chRoute"></canvas>
+  <p class="say"><b>Mara, die Älteste</b><span id="chSay"></span></p>
+  <button class="pri" id="bCh">Weiter</button>
+</div></div>
+
+<div id="diary" class="ov hidden"><div class="card">
+  <div id="diaryTabs">
+    <button data-tab="goals">Ziele</button><button data-tab="ach">Erfolge</button><button data-tab="book">Sammelbuch</button><button data-tab="stats">Statistik</button>
+  </div>
+  <div id="diaryBody"></div>
+  <button id="bDiaryClose">Schließen</button>
+</div></div>
+
+<div id="menu" class="ov hidden"><div class="card">
+  <h2>Glutfrost</h2>
+  <button class="pri" id="bResume">Weiterspielen</button>
+  <button id="bHelp">Anleitung</button>
+  <button id="bMute">Ton: an</button>
+  <button class="dan" id="bReset">Spielstand löschen</button>
+</div></div>
+
+<div id="help" class="ov hidden"><div class="card">
+  <h2>So wird gespielt</h2>
+  <ul>
+    <li><b>Bewegen:</b> irgendwo auf den Bildschirm tippen und ziehen (oder WASD / Pfeiltasten).</li>
+    <li>Deine <b>Äxte</b> kreisen automatisch und treffen alles in der Nähe: Eisbären, Bäume, Erzfelsen.</li>
+    <li>Rohes <b>Fleisch</b> → Feld links am Ofen. Gebratenes Fleisch abholen → zur <b>Theke</b> bringen.</li>
+    <li>Die Überlebenden bezahlen. <b>Geld</b> am Geldstapel einsammeln.</li>
+    <li>Stell dich auf ein <b>Bau-Feld</b>, um Geld einzuzahlen und Upgrades zu kaufen.</li>
+    <li>Draußen wird dir <b>kalt</b>! Am Ofen wärmst du dich auf. Bei <b>Schneesturm</b> doppelt aufpassen – dafür zahlt Kohle doppelt.</li>
+    <li>Im Wald lauert der <b>Yeti</b>. Weiche den roten Kreisen aus!</li>
+    <li><b>Ziel:</b> Folge den Kapitelzielen oben links. Im <b>Tagebuch</b> 📖 findest du Ziele, Erfolge, das Sammelbuch und deine Statistik.</li>
+    <li><b>Figuren</b> mit einem <b>!</b> über dem Kopf haben einen Auftrag. Stell dich kurz zu ihnen, um ihn anzunehmen (höchstens zwei gleichzeitig).</li>
+    <li><b>Siedlung:</b> Ab Ofen-Stufe 3 erweiterst du das Lager nach Südwesten. Gebäude brauchen Geld, <b>Holz</b> 🪵 und <b>Stein</b> 🪨.</li>
+    <li>Im <b>Eissee</b> stellst du dich neben ein Eisloch und angelst. <b>Feuerkristalle</b> 🔶 bringen den Ofen bis Stufe 8.</li>
+  </ul>
+  <button class="pri" id="bHelpOk">Los geht's</button>
+</div></div>
+
+<div id="offline" class="ov hidden"><div class="card">
+  <h2>Willkommen zurück!</h2>
+  <p id="offTxt"></p>
+  <button class="pri" id="bOff">Einsammeln</button>
+</div></div>
+
+<div id="confirm" class="ov hidden"><div class="card">
+  <h2>Wirklich neu starten?</h2>
+  <p>Dein gesamter Fortschritt geht verloren.</p>
+  <button class="dan" id="bYes">Ja, löschen</button>
+  <button id="bNo">Abbrechen</button>
+</div></div>
+
+<script src="js/core.js"></script>
+<script src="js/state.js"></script>
+<script src="js/world.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/input.js"></script>
+<script src="js/logic.js"></script>
+<script src="js/hint.js"></script>
+<script src="js/draw-objects.js"></script>
+<script src="js/draw-scene.js"></script>
+<script src="js/menu.js"></script>
+<script src="js/story.js"></script>
+<script src="js/meta.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
