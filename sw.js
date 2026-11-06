@@ -1,6 +1,6 @@
 // Service Worker: macht Glutfrost offline spielbar.
 // Bei jeder Änderung am Spiel VERSION erhöhen, damit Geräte die neue Fassung laden.
-const VERSION = 'glutfrost-v3';
+const VERSION = 'glutfrost-v4';
 const FILES = ['./', 'index.html', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
