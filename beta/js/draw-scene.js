@@ -88,6 +88,7 @@ function drawGround(t) {
     ctx.setLineDash([9, 7]); ctx.strokeStyle = p.cur === 'iron' ? '#dfe6ec' : '#ffffff'; ctx.lineWidth = 3;
     ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(p.x - 30, p.y - 28, 60, 56, 10); else ctx.rect(p.x - 30, p.y - 28, 60, 56); ctx.stroke(); ctx.setLineDash([]);
   }
+  drawCh3Ground(t);
   // Yeti-Angriffe
   for (const c of casts) {
     const k = 1 - c.t / c.T;
@@ -172,6 +173,7 @@ function draw(now) {
     drawStack(n.x - 4 * n.face, n.y - 6, n.stack, 30);
   });
   addFigures(add, t);
+  addCh3(add, t);
   // Spieler
   if (player.dead <= 0) {
     add(player.y, () => {
@@ -192,6 +194,7 @@ function draw(now) {
 
   // Bolzen
   for (const b of bolts) { at(b.x, b.y, b.z); const a = Math.atan2(b.tgt.y - b.y, b.tgt.x - b.x); ctx.rotate(Math.atan2(Math.sin(a) * TY, Math.cos(a))); rr(-9, -1.5, 18, 3, 1, '#6b4426'); poly([9, -3, 14, 0, 9, 3], '#ccd'); }
+  drawWolfBolts();
   // Flieger
   for (const f of flyers) {
     const k = clamp(f.t / f.dur, 0, 1), e = k * (2 - k);
@@ -208,6 +211,7 @@ function draw(now) {
 const SYM = { cash: '$', iron: '⛓', stone: '🪨', wood: '🪵', crystal: '🔶' };
 function drawOverlays(t) {
   screenT();
+  drawNight(); screenT();
   // Bau-Feld-Beschriftungen
   let nearPad = null, npd = 140;
   for (const p of PADS) { if (!padActive(p)) continue; const d = dist(player.x, player.y, p.x, p.y); if (d < npd) { npd = d; nearPad = p; } }
@@ -307,6 +311,7 @@ function bar(x, y, w, frac, col, label) {
   rr(x, y, w, 12, 6, 'rgba(25,35,50,.5)'); rr(x + 2, y + 2, (w - 4) * clamp(frac, 0, 1), 8, 4, col);
   txt(label, x + w + 8, y + 6, 12, '#fff', 'left', 'rgba(0,0,0,.45)', 700);
 }
+let hudColY = 0; // nächste freie Zeile der rechten HUD-Spalte
 function drawHUD(t) {
   screenT();
   const top = 12 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0);
@@ -328,6 +333,7 @@ function drawHUD(t) {
   txt('🎒', x + 20, y + 17, 16, '#fff', 'center', null);
   txt(n + '/' + c, x + pw - 12, y + 17, 17, n >= c ? '#ffb35c' : '#fff', 'right', 'rgba(0,0,0,.35)');
   if (n >= c) txt('VOLL', x + pw / 2, y + 44, 12, '#ffb35c', 'center');
+  hudColY = y + (n >= c ? 54 : 40);
   // Leben/Wärme
   if (player.hp < 100 || player.warm < 100) {
     bar(14, top + 88, 120, player.hp / 100, '#ff5a5a', 'Leben');
@@ -355,6 +361,7 @@ function drawHUD(t) {
     const dx = joy.x - joy.ox, dy = joy.y - joy.oy, l = Math.hypot(dx, dy), m = Math.min(l, 55);
     ctx.globalAlpha = .8; ell(joy.ox + (l ? dx / l * m : 0), joy.oy + (l ? dy / l * m : 0), 24, 24, '#ffffff'); ctx.globalAlpha = 1;
   }
+  drawCh3HUD(top);
   drawToasts(top);
   // Banner
   if (banner) {

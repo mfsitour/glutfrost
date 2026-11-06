@@ -100,6 +100,8 @@ const FINDS = [
   { id: 'splitter', n: 'Glutsplitter', ic: '🔥', src: 'crystal', p: .12, d: 'Warm wie eine Hand. Mara sagt: ein Stück vom Glutherz.' },
   { id: 'blatt', n: 'Tagebuchblatt', ic: '📜', src: 'yeti', p: .6, d: '»… hinter dem Pass, wo die Wölfe heulen, beginnt der Weg zum Glutherz …«' },
 ];
+const EXTRA_FINDS = []; // Fundstücke späterer Kapitel (stehen auf deren eigener Sammelbuch-Seite)
+const allFinds = () => FINDS.concat(EXTRA_FINDS);
 const BOOK = [
   { id: 'animals', n: 'Tiere der Ebene', bonus: '+5 % Fleischpreis', e: [
     { id: 'bear', n: 'Eisbär', ic: '🐻‍❄️', d: 'Streift durch das Eisfeld im Norden. Liefert Fleisch.' },
@@ -129,12 +131,12 @@ function discover(id) {
 }
 // Fundstücke: seltene, einmalige Drops bei bestimmten Tätigkeiten
 function rollFind(src, x, y) {
-  for (const f of FINDS) {
+  for (const f of allFinds()) {
     if (f.src !== src || has(f.id) || drops.some(d => d.fid === f.id)) continue;
     if (Math.random() < f.p) { drops.push({ type: 'find', fid: f.id, v: 1, x, y, z: 18, vx: rand(-80, 80), vy: rand(-80, 80), vz: 260, age: 0 }); return; }
   }
 }
-function pickFind(d) { const f = FINDS.find(x => x.id === d.fid); if (discover(d.fid)) { snd('gem'); ftext(player.x, player.y, 70, f.ic + ' ' + f.n, '#ffe27a', 17); } }
+function pickFind(d) { const f = allFinds().find(x => x.id === d.fid); if (discover(d.fid)) { snd('gem'); ftext(player.x, player.y, 70, f.ic + ' ' + f.n, '#ffe27a', 17); } }
 function catchFish() { // Art eines gefangenen Fisches auswürfeln
   let r = Math.random(), sp = FISH_SP[0];
   for (const f of FISH_SP) { if (r < f.p) { sp = f; break; } r -= f.p; }

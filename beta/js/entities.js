@@ -103,8 +103,9 @@ const PADS = [
   { id: 'coalCt', x: COAL_CT.zx, y: COAL_CT.zy, ic: '⚫', name: () => 'Kohle-Theke', cost: () => S.own.coalCt ? null : 40, vis: () => S.own.kiln, buy: () => S.own.coalCt = 1 },
   {
     id: 'furnace', x: 155, y: 170, ic: '🔥', name: () => 'Ofen Stufe ' + (S.lv.furnace + 1),
-    req: () => { const l = S.lv.furnace; return l < 5 ? { cash: [120, 360, 900, 1800][l - 1] } : l < 8 ? { cash: [2500, 4000, 6500][l - 5], crystal: [8, 15, 25][l - 5] } : null; },
-    vis: () => S.own.tower && (S.lv.furnace < 5 || S.own.lake),
+    req: () => { const l = S.lv.furnace; return l < 5 ? { cash: [120, 360, 900, 1800][l - 1] } : l < 8 ? { cash: [9000, 18000, 28000][l - 5], crystal: [15, 30, 40][l - 5] } : null; },
+    // Höchststufe je Kapitel: K2 bis 5, K3 bis 7, danach 8
+    vis: () => S.own.tower && (S.lv.furnace < 5 || S.own.lake) && S.lv.furnace < (S.ch >= 4 ? 8 : S.ch >= 3 ? 7 : 5),
     buy: () => {
       S.lv.furnace++;
       if (S.lv.furnace >= 5 && !S.won) S.won = 1; // Kapitelabschluss übernimmt jetzt die Kampagne

@@ -13,6 +13,8 @@ $('bHelp').onclick = () => { show('menu', false); show('help', true); };
 $('bHelpOk').onclick = () => { show('help', false); S.helpSeen = 1; save(); };
 $('bMute').onclick = () => { S.muted = S.muted ? 0 : 1; $('bMute').textContent = 'Ton: ' + (S.muted ? 'aus' : 'an'); save(); };
 $('bMute').textContent = 'Ton: ' + (S.muted ? 'aus' : 'an');
+$('bMusic').onclick = () => { S.music = S.music ? 0 : 1; $('bMusic').textContent = 'Musik: ' + (S.music ? 'an' : 'aus'); save(); };
+$('bMusic').textContent = 'Musik: ' + (S.music ? 'an' : 'aus');
 $('bReset').onclick = () => { show('menu', false); show('confirm', true); };
 $('bNo').onclick = () => show('confirm', false);
 // Beta: leeren Spielstand hinterlegen, sonst würde beim Neuladen wieder der echte Spielstand kopiert

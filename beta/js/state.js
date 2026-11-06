@@ -11,7 +11,8 @@ let hudCash = 0, hudBump = 0, prevCash = 0;
 const DEF = () => ({
   cash: 0, iron: 0, stone: 0, crystal: 0,
   lv: { axes: 1, cap: 0, boots: 0, coat: 0, sharp: 0, furnace: 1, hunter: 0, huts: 0, store: 0 },
-  own: { tower: 0, forest: 0, kiln: 0, coalCt: 0, mine: 0, server: 0, lumber: 0, settle: 0, smoke: 0, stall: 0, lake: 0, fisher: 0, seller: 0 },
+  own: { tower: 0, forest: 0, kiln: 0, coalCt: 0, mine: 0, server: 0, lumber: 0, settle: 0, smoke: 0, stall: 0, lake: 0, fisher: 0, seller: 0,
+    pass: 0, wall: 0, watch1: 0, watch2: 0, ammoSt: 0, armorer: 0, den: 0 },
   paid: {}, grillIn: 0, grillOut: 0, kilnIn: 0, kilnOut: 0, meatCt: 0, coalCt: 0, cashPile: 0,
   fishIn: 0, smokeOut: 0, stallCt: 0, cashPile2: 0,
   time: 0, nextBliz: 0, won: 0, sold: 0, yetiKills: 0, muted: 0, helpSeen: 0,
@@ -20,6 +21,8 @@ const DEF = () => ({
   quests: [], offers: {}, qNext: {}, qDone: 0,
   // Langzeitmotivation
   st: {}, ach: {}, book: {}, sparks: 0, diaryNew: 0,
+  // Kapitel 3: Tag und Nacht, Munition, Rudelführer
+  dayT: 0, nightNo: 0, nightsOk: 0, shots: 0, ammoW: 0, ammoC: 0, bossDead: 0, frz: {}, music: 1,
 });
 let S = DEF();
 function load() {
@@ -29,7 +32,7 @@ function load() {
     if (!raw && BETA) { raw = localStorage.getItem(LIVE_KEY); if (raw) localStorage.setItem(KEY, raw); }
     const j = JSON.parse(raw);
     // Fehlende Felder alter Spielstände mit Standardwerten auffüllen
-    if (j) { const d = DEF(), lv = Object.assign(d.lv, j.lv || {}), own = Object.assign(d.own, j.own || {}); S = Object.assign(d, j); S.lv = lv; S.own = own; S.paid = j.paid || {}; S.st = j.st || {}; S.ach = j.ach || {}; S.book = j.book || {}; S.offers = j.offers || {}; S.qNext = j.qNext || {}; S.quests = j.quests || []; }
+    if (j) { const d = DEF(), lv = Object.assign(d.lv, j.lv || {}), own = Object.assign(d.own, j.own || {}); S = Object.assign(d, j); S.lv = lv; S.own = own; S.paid = j.paid || {}; S.st = j.st || {}; S.ach = j.ach || {}; S.book = j.book || {}; S.offers = j.offers || {}; S.qNext = j.qNext || {}; S.quests = j.quests || []; S.frz = j.frz || {}; }
   } catch (e) { }
 }
 let resetting = false;

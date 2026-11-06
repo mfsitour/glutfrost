@@ -71,6 +71,7 @@ function swing(owner, nAxes, damage, src, npc, dt) {
   if (z === 'iron') hitAll(rocks, 22, 'rock');
   if (z === 'settle' && S.own.settle) hitAll(stones, 22, 'stone');
   if (z === 'lake' && S.own.lake) hitAll(crystals, 24, 'crystal');
+  if (src === 'player' && swingWolves(near, cd, damage, dt)) hitSomething = true;
   return hitSomething;
 }
 
@@ -86,6 +87,7 @@ function solids() {
   if (S.own.smoke) a.push(SMOKE);
   if (S.lv.store) a.push(STORE);
   for (const h of homes()) a.push({ x: h.x, y: h.y, r: 26 });
+  ch3Solids(a);
   return a;
 }
 function moveCircle(e, dx, dy, r) {
@@ -111,8 +113,9 @@ function moveCircle(e, dx, dy, r) {
 const WP = {
   field: [[0, -195], [0, -300]], forest: [[150, -92], [262, -130], [370, -130]], iron: [[-150, -92], [-262, -130], [-370, -130]],
   settle: [[-140, 185], [-236, 255], [-236, 420]], lake: [[LAKE_X + 60, LAKE_GATE.y], [LAKE_X - 60, LAKE_GATE.y]],
+  pass: [[PASS_GX, -960], [PASS_GX, -1050]], den: [[PASS_GX, DEN_Y + 40], [PASS_GX, DEN_Y - 50]],
 };
-const ZPAR = { field: 'camp', forest: 'camp', iron: 'camp', settle: 'camp', lake: 'settle' };
+const ZPAR = { field: 'camp', forest: 'camp', iron: 'camp', settle: 'camp', lake: 'settle', pass: 'field', den: 'pass' };
 function zchain(z) { const c = [z]; while (ZPAR[c[c.length - 1]]) c.push(ZPAR[c[c.length - 1]]); return c; }
 function route(a, b) {
   if (a === b) return [];
@@ -127,7 +130,7 @@ function route(a, b) {
 // Kernbereich einer Zone (ohne Zugangskorridor). Im Korridor muss erst der Eingang angesteuert werden.
 const CORE = {
   field: (x, y) => inRect(x, y, FIELD), forest: (x, y) => inRect(x, y, FOREST), iron: (x, y) => inRect(x, y, MINE),
-  settle: (x, y) => y >= SB.y0, lake: () => true,
+  settle: (x, y) => y >= SB.y0, lake: () => true, pass: () => true, den: () => true,
 };
 function planPath(x0, y0, x1, y1) {
   const a = zoneOf(x0, y0), b = zoneOf(x1, y1);
@@ -206,8 +209,8 @@ function update(dt) {
 
   // ---------- Stationen ----------
   grillT += dt;
-  if (S.grillIn > 0 && S.grillOut < 120 && grillT >= cookT()) { grillT = 0; S.grillIn--; S.grillOut++; burst(FURN.x - 40, FURN.y, 50, '#ffb12b', 2, 40, 2); }
-  if (S.own.kiln) { kilnT += dt; if (S.kilnIn > 0 && S.kilnOut < 120 && kilnT >= cookT() * 1.5) { kilnT = 0; S.kilnIn--; S.kilnOut++; } }
+  if (S.grillIn > 0 && S.grillOut < 120 && grillT >= cookT() && !frozen('grill')) { grillT = 0; S.grillIn--; S.grillOut++; burst(FURN.x - 40, FURN.y, 50, '#ffb12b', 2, 40, 2); }
+  if (S.own.kiln) { kilnT += dt; if (S.kilnIn > 0 && S.kilnOut < 120 && kilnT >= cookT() * 1.5 && !frozen('kiln')) { kilnT = 0; S.kilnIn--; S.kilnOut++; } }
   if (S.own.smoke) { smokeT += dt; if (S.fishIn > 0 && S.smokeOut < 120 && smokeT >= cookT() * 1.3) { smokeT = 0; S.fishIn--; S.smokeOut++; } }
 
   // ---------- Eislöcher (Angeln) ----------
@@ -283,10 +286,10 @@ function update(dt) {
   for (let i = casts.length - 1; i >= 0; i--) {
     const c = casts[i]; c.t -= dt;
     if (c.t <= 0) {
-      casts.splice(i, 1); snd('boom');
-      for (let k = 0; k < 9; k++) { const a = rand(0, TAU), rr2 = rand(0, c.r * .8); shards.push({ x: c.x + Math.cos(a) * rr2, y: c.y + Math.sin(a) * rr2, h: rand(20, 46), life: 1.1, rot: rand(-.4, .4) }); }
-      burst(c.x, c.y, 10, '#b47cff', 18, 200, 5);
-      if (!player.dead && dist(player.x, player.y, c.x, c.y) < c.r) hurtPlayer(22, true);
+      casts.splice(i, 1); snd('boom'); if (c.cb) c.cb(c);
+      if (!c.wolf) for (let k = 0; k < 9; k++) { const a = rand(0, TAU), rr2 = rand(0, c.r * .8); shards.push({ x: c.x + Math.cos(a) * rr2, y: c.y + Math.sin(a) * rr2, h: rand(20, 46), life: 1.1, rot: rand(-.4, .4) }); }
+      burst(c.x, c.y, 10, c.wolf ? '#ffffff' : '#b47cff', 18, 200, 5);
+      if (!player.dead && dist(player.x, player.y, c.x, c.y) < c.r) hurtPlayer(c.dmg || 22, true);
       if (dist(player.x, player.y, c.x, c.y) < 400) shake = Math.max(shake, 7);
     }
   }
@@ -331,7 +334,7 @@ function update(dt) {
   if (S.own.forest && S.time >= S.nextBliz + 28) { S.nextBliz += 150; emit('bliz', 1, false); }
 
   // ---------- Kampagne & Langzeitmotivation ----------
-  updateChapter(dt); updateQuests(dt); checkAch(dt);
+  updateChapter(dt); updateQuests(dt); checkAch(dt); updateCh3(dt);
   if (blizWarn() && !banner && S.time - (S._warned || 0) > 20) { S._warned = S.time; snd('warn'); banner = { t: 4, a: '❄️ Schneesturm zieht auf!', b: 'Draußen wird es eiskalt – Kohle zahlt jetzt doppelt.' }; }
   if (banner) { banner.t -= dt; if (banner.t <= 0) banner = null; }
 
@@ -344,7 +347,7 @@ function update(dt) {
 }
 
 const CURR = { cash: 'Geld', iron: 'Eisen', stone: 'Stein', crystal: 'Kristall' }; // Vorräte, nicht im Rucksack
-const nearBraz = () => S.own.settle && dist(player.x, player.y, BRAZ.x, BRAZ.y) < brazR();
+const nearBraz = () => (S.own.settle && dist(player.x, player.y, BRAZ.x, BRAZ.y) < brazR()) || (S.own.pass && dist(player.x, player.y, YFIRE.x, YFIRE.y) < 260);
 function splash(h) {
   snd('splash'); burst(h.x, h.y, 4, '#7fc4ee', 10, 120, 4); burst(h.x, h.y, 4, '#ffffff', 6, 90, 3);
 }
@@ -366,6 +369,7 @@ function doTransfers() {
     fly(type, player.x, player.y - 6, stackTopZ(n), p.x, p.y, 12, .28, onArrive); snd('drop'); return true;
   };
   if (questTransfer(give)) return true;
+  if (ammoTransfer(give)) return true;
   if (near(GRILL_IN) && give('raw', GRILL_IN, () => S.grillIn++)) return true;
   if (near(GRILL_OUT) && !full && S.grillOut > 0) { S.grillOut--; st.push('cooked'); snd('pick'); return true; }
   if (near({ x: MEAT_CT.zx, y: MEAT_CT.zy }, 42) && S.meatCt < 60 && give('cooked', MEAT_CT, () => S.meatCt++)) return true;
@@ -522,7 +526,7 @@ function updateNpc(n, dt) {
     for (const j of jobs) if (j.on() && S[j.ctKey] < 25 && S[j.key] > 0 && (!best || S[j.ctKey] < S[best.ctKey])) best = j;
     n.src = best;
   }
-  if (!n.src) { if (n.stack.length) n.mode = 'deliver'; else npcGo(n, n.kind === 'server' ? 0 : -300, n.kind === 'server' ? 150 : 520, SP * .6, dt); return; }
+  if (!n.src) { if (n.stack.length) n.mode = 'deliver'; else { const ip = { server: [0, 150], seller: [-300, 520], armorer: [150, -200] }[n.kind]; npcGo(n, ip[0], ip[1], SP * .6, dt); } return; }
   const j = n.src;
   if (npcGo(n, j.pos.x, j.pos.y + 6, SP, dt) || dist(n.x, n.y, j.pos.x, j.pos.y) < 20) {
     if (n.xfer <= 0) {
@@ -538,6 +542,7 @@ const SERVE = {
     { key: 'kilnOut', pos: KILN_OUT, item: 'coal', ct: COAL_CT, ctKey: 'coalCt', on: () => S.own.coalCt },
   ],
   seller: [{ key: 'smokeOut', pos: SMOKE_OUT, item: 'smoked', ct: STALL, ctKey: 'stallCt', on: () => S.own.stall }],
+  armorer: [{ key: 'kilnOut', pos: KILN_OUT, item: 'coal', ct: AMMO, ctKey: 'ammoC', on: () => S.own.ammoSt }],
 };
 
 function updateQueue(q, dt) {
@@ -566,7 +571,7 @@ function updateQueue(q, dt) {
       const idx = q.list.filter(o => o.state !== 'leave').indexOf(s);
       if (idx === 0 && d < 6) {
         s.takeT -= dt;
-        if (s.takeT <= 0 && S[q.key] > 0 && s.got < s.want) {
+        if (s.takeT <= 0 && S[q.key] > 0 && s.got < s.want && !frozen(q.key)) {
           s.takeT = .2; S[q.key]--; s.got++;
           fly(q.item, q.ct.x + rand(-20, 20), q.ct.y, 26, s.x, s.y, 30, .2);
         }

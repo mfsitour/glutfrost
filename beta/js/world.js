@@ -29,6 +29,15 @@ const CASH2 = { x: -345, y: 575 };
 const STORE = { x: -500, y: 660, r: 34 };
 const HUTS = [{ x: -520, y: 805 }, { x: -430, y: 825 }, { x: -340, y: 805 }];
 const homes = () => HUTS.slice(0, S.lv.huts >= 2 ? 3 : 2);
+// Kapitel 3: Wolfspass nördlich des Eisfelds, oben die Höhle des Rudelführers
+const PASS = { x0: -430, x1: 130, y0: -1700, y1: -1000 };
+const DEN_Y = -1420;                        // Zaun zwischen Pass und Höhle
+const PASS_GX = -150;                       // Mitte der Tore (Pass- und Höhlentor)
+const WATCH = [{ x: -62, y: -222, r: 20 }, { x: 62, y: -222, r: 20 }]; // Wachtürme am Nordtor des Lagers
+const AMMO = { x: 118, y: -222, zx: 118, zy: -222, r: 18 };            // Munitionslager
+const YFIRE = { x: -330, y: -1090, r: 16 };                            // Ylvas Lagerfeuer im Pass
+const NGATE = { x0: -45, x1: 45, y: -260 };                            // Lücke im Nordzaun (Palisade)
+const BOSS_HOME = { x: PASS_GX, y: -1570 };
 
 function hexV(i) { const a = i * Math.PI / 3; return [HR * Math.cos(a), HR * Math.sin(a)]; }
 function inHexPt(x, y, R = HR) { const ax = Math.abs(x), ay = Math.abs(y); return ay <= R * 0.866 && 1.732 * ax + ay <= 1.732 * R; }
@@ -40,11 +49,13 @@ function inRegion(x, y) {
   if (inRect(x, y, FOREST)) return true;
   if (inRect(x, y, MINE)) return true;
   if (inRect(x, y, SA) || inRect(x, y, SB)) return true;
+  if (inRect(x, y, PASS)) return true;
   return false;
 }
 function zoneOf(x, y) {
   if (inHexPt(x, y, HR - 2)) return 'camp';
   if (x < -160 && (y > 350 || (y > 150 && x > -315))) return x < LAKE_X ? 'lake' : 'settle';
+  if (y < -1000) return y < DEN_Y ? 'den' : 'pass';
   if (y < -250 && x < 315) return 'field';
   if (x >= 315) return 'forest';
   if (x <= -315) return 'iron';
@@ -69,7 +80,11 @@ edge(4, [[0, .35, 'f'], [.65, 1, 'f']]); // Nordtor offen
 edge(5, [[0, .35, 'f'], [.35, .65, 'gF'], [.65, 1, 'f']]);
 // Eisfeld
 seg(-600, -258, -152, -258); seg(152, -258, 315, -258);
-seg(-600, -1000, 315, -1000); seg(-600, -1000, -600, -258);
+seg(-600, -1000, PASS_GX - 50, -1000); seg(PASS_GX - 50, -1000, PASS_GX + 50, -1000, 'gP'); seg(PASS_GX + 50, -1000, 315, -1000);
+seg(-600, -1000, -600, -258);
+// Wolfspass und Höhle
+seg(PASS.x0, PASS.y1, PASS.x0, PASS.y0); seg(PASS.x1, PASS.y1, PASS.x1, PASS.y0); seg(PASS.x0, PASS.y0, PASS.x1, PASS.y0);
+seg(PASS.x0, DEN_Y, PASS_GX - 50, DEN_Y); seg(PASS_GX - 50, DEN_Y, PASS_GX + 50, DEN_Y, 'gD'); seg(PASS_GX + 50, DEN_Y, PASS.x1, DEN_Y);
 // Wald
 seg(315, -1000, 315, -175); seg(315, -85, 315, 380);
 seg(315, -650, 1050, -650); seg(1050, -650, 1050, 380); seg(315, 380, 1050, 380);
@@ -83,7 +98,7 @@ seg(-312, 150, -213.4, 150); seg(-160, 242.5, -160, 900);
 seg(-1150, 350, -1050, 350); seg(-1150, 350, -1150, 900); seg(-1150, 900, -160, 900);
 seg(LAKE_X, 350, LAKE_X, 560); seg(LAKE_X, 560, LAKE_X, 680, 'gE'); seg(LAKE_X, 680, LAKE_X, 900);
 
-const GATES = { gF: 'forest', gI: 'mine', gS: 'settle', gE: 'lake' };
+const GATES = { gF: 'forest', gI: 'mine', gS: 'settle', gE: 'lake', gP: 'pass', gD: 'den' };
 function segActive(s) {
   const g = GATES[s.k];
   return g ? !S.own[g] : true;
@@ -98,8 +113,9 @@ for (const s of segs) {
 
 // Deko: Bäume außerhalb der Zonen, Schneehügel
 const decoTrees = [], mounds = [];
-for (let i = 0; i < 420 && decoTrees.length < 170; i++) {
-  const x = rand(-1400, 1400), y = rand(-1350, 950);
+for (let i = 0; i < 600 && decoTrees.length < 230; i++) {
+  const x = rand(-1400, 1400), y = rand(-1850, 950);
+  if (y < -980 && x > -500 && x < 200) continue; // Wolfspass
   if (inRegion(x, y) || inHexPt(x, y, HR + 90)) continue;
   if (y > 220 && Math.abs(x) < 420) continue; // Weg der Überlebenden
   if (x > 280 && x < 1100 && y > -700 && y < 420) continue;
