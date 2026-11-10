@@ -41,8 +41,17 @@
   .say{background:#f6efe2;border-radius:12px;padding:10px 12px;font-size:14px;color:#4a3410;margin:8px 0 0}
   .say b{display:block;font-size:12px;color:#8a5a1c;margin-bottom:2px}
   #diary .card{max-width:440px;height:min(640px,calc(100% - 80px));display:flex;flex-direction:column;padding:16px 16px 12px}
-  #diaryTabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:0 0 10px}
-  #diaryTabs button{margin:0;padding:8px 2px;font-size:12.5px;border-radius:10px}
+  #diaryTabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 10px}
+  #diaryTabs button{margin:0;padding:6px 1px;font-size:11px;border-radius:10px}
+  #diaryTabs button i{display:block;font-style:normal;font-size:16px;pointer-events:none}
+  .lookTop{display:flex;gap:12px;align-items:center} #lookCv{flex:none;position:static;inset:auto;width:120px;height:150px;background:linear-gradient(#dcecf7,#f4f8fb);border-radius:14px}
+  .sws,.chips{display:flex;flex-wrap:wrap;gap:8px}
+  .sw{width:40px !important;height:40px;margin:0 !important;padding:0 !important;border-radius:50% !important;border:3px solid #fff !important;box-shadow:0 0 0 2px #cfd8e0;font-size:14px !important;flex:none}
+  .sw.none{background:#eef1f4} .sw.on{box-shadow:0 0 0 3px #2a5d86} .sw:disabled{opacity:.55}
+  .chip{width:auto !important;margin:0 !important;padding:8px 12px !important;font-size:12.5px !important;border-radius:999px !important}
+  .chip.on,.hero.on{background:#2a5d86 !important;color:#fff !important} .chip:disabled{opacity:.5}
+  .hero{margin:0 !important;padding:8px !important;border-radius:10px !important;display:flex !important;flex-direction:column;gap:1px;text-align:left;font-size:12px !important;font-weight:500 !important}
+  .hero b{font-size:14px} .hero.on .rw{color:#ffd9a0} .hero .rw{font-weight:700;color:#a8662a} .hero *{pointer-events:none}
   .gbtn{display:inline-block !important;width:auto !important;margin:2px 0 2px 4px !important;padding:6px 9px !important;font-size:12px !important;border-radius:8px !important}
   .gbtn:disabled{opacity:.45}
   #credits.ov{background:rgba(10,14,24,.94)}
@@ -108,8 +117,8 @@
 
 <div id="diary" class="ov hidden"><div class="card">
   <div id="diaryTabs">
-    <button data-tab="goals">🎯 Ziele</button><button data-tab="ach">🏆 Erfolge</button><button data-tab="book">📖 Sammelbuch</button>
-    <button data-tab="gear">🎒 Ausrüstung</button><button data-tab="stats">📊 Statistik</button><button data-tab="glut">✨ Glut</button>
+    <button data-tab="goals"><i>🎯</i>Ziele</button><button data-tab="ach"><i>🏆</i>Erfolge</button><button data-tab="book"><i>📖</i>Sammelbuch</button><button data-tab="gear"><i>🎒</i>Ausrüstung</button>
+    <button data-tab="look"><i>🧑</i>Figur</button><button data-tab="stats"><i>📊</i>Statistik</button><button data-tab="glut"><i>✨</i>Glut</button>
   </div>
   <div id="diaryBody"></div>
   <button id="bDiaryClose">Schließen</button>
@@ -119,6 +128,7 @@
   <h2>Glutfrost</h2>
   <button class="pri" id="bResume">Weiterspielen</button>
   <button id="bHelp">Anleitung</button>
+  <button id="bLook">Figur anpassen</button>
   <button id="bMute">Ton: an</button>
   <button id="bMusic">Musik: an</button>
   <button class="dan" id="bReset">Spielstand löschen</button>
@@ -138,6 +148,8 @@
     <li><b>Wolfspass</b> (Kapitel 3): Ab jetzt gibt es Tag und Nacht. Nachts greifen Wölfe das Lager an – baue die <b>Palisade</b> und <b>Wachtürme</b> und füll das <b>Munitionslager</b> mit Holz oder Kohle.</li>
     <li><b>Später</b> warten die Erzgrube (Werkzeug 🔨 und Ausrüstung), die Weiße Weite (Kleidung 🧶, Schlitten 🛷) und das Glutherz. Ausrüstung findest du in <b>Truhen</b> – zerschlag sie mit den Äxten.</li>
     <li><b>Figuren</b> mit einem <b>!</b> über dem Kopf haben einen Auftrag. Stell dich kurz zu ihnen, um ihn anzunehmen (höchstens zwei gleichzeitig).</li>
+    <li><b>Deine Figur:</b> Im Tagebuch unter <b>Figur</b> wählst du einen <b>Helden</b> (jeder hat einen kleinen Bonus) und änderst Mantel, Kopfbedeckung, Haare und Schal. Besondere Teile gibt es für Erfolge.</li>
+    <li><b>Stein</b> 🪨 und <b>Eisen</b> ⛓ brauchst du bis zum Schluss: für Ofenstufen und Gebäude, zum Verstärken von Palisade und Wachtürmen, zum Verbessern der Ausrüstung – und Händler Tomke kauft sie dir ab.</li>
     <li><b>Siedlung:</b> Ab Ofen-Stufe 3 erweiterst du das Lager nach Südwesten. Gebäude brauchen Geld, <b>Holz</b> 🪵 und <b>Stein</b> 🪨.</li>
     <li>Im <b>Eissee</b> stellst du dich neben ein Eisloch und angelst. <b>Feuerkristalle</b> 🔶 bringen den Ofen bis Stufe 8.</li>
   </ul>
@@ -176,6 +188,7 @@
 <script src="js/ch5.js"></script>
 <script src="js/ch6.js"></script>
 <script src="js/endgame.js"></script>
+<script src="js/hero.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

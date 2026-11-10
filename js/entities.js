@@ -24,15 +24,15 @@ for (let i = 0; i < 24; i++) bears.push(spawnBear({}, false));
       const tx = x + rand(-20, 20) + ((y / 66) % 2) * 26, ty = y + rand(-16, 16);
       if (Math.random() < .3) continue;
       if (dist(tx, ty, 820, -150) < 190) continue;   // Lichtung des Yetis
-      if (Math.abs(ty + 130) < 50 && tx < 430) continue; // Eingang frei
+      if (Math.abs(ty - GATE_Y) < 55 && tx < 510) continue; // Eingang frei
       trees.push({ x: tx, y: ty, hp: 4, max: 4, hitCd: 0, stump: 0, shake: 0, s: rand(.9, 1.2), zone: 'forest' });
     }
 })();
 (function makeRocks() {
   for (let i = 0; i < 400 && rocks.length < 34; i++) {
     const x = rand(MINE.x0 + 50, MINE.x1 - 40), y = rand(MINE.y0 + 40, MINE.y1 - 30);
-    if (Math.abs(y + 130) < 50 && x > -430) continue;
-    if (dist(x, y, -400, -20) < 80) continue; // Schärf-Feld
+    if (Math.abs(y - GATE_Y) < 55 && x > -510) continue;
+    if (dist(x, y, -470, -20) < 80) continue; // Schärf-Feld
     if (rocks.some(r => dist(r.x, r.y, x, y) < 70)) continue;
     rocks.push({ x, y, hp: 8, max: 8, hitCd: 0, stump: 0, shake: 0, s: rand(.85, 1.25), seed: Math.random() });
   }
@@ -72,7 +72,7 @@ function spawnYeti() {
 if (S.own.forest) spawnYeti();
 
 function spawnNpc(kind) {
-  npcs.push({ kind, x: rand(-40, 40), y: 130, stack: [], path: [], gx: 1e9, gy: 1e9, replan: 0, hitT: 0, anim: 0, axeA: 0, target: null, xfer: 0, face: 1 });
+  npcs.push({ kind, x: rand(-40, 40), y: 160, stack: [], path: [], gx: 1e9, gy: 1e9, replan: 0, hitT: 0, anim: 0, axeA: 0, target: null, xfer: 0, face: 1 });
 }
 for (let i = 0; i < S.lv.hunter; i++) spawnNpc('hunter');
 if (S.own.server) spawnNpc('server');
@@ -89,20 +89,20 @@ const queues = {
   // Bewohner der Siedlung kommen aus ihren Hütten zum Marktstand
   fish: { ct: STALL, key: 'stallCt', item: 'smoked', list: [], spawnT: 1, max: () => 3 + S.lv.huts, price: fishPrice, on: () => S.own.stall, pile: 'cashPile2', at: CASH2, cols: RES_COATS, res: 1 },
 };
-function queueSpot(q, i) { return q.res ? [q.ct.x + (i % 2 ? 10 : -6), q.ct.y + 45 + i * 40] : [q.ct.x + (i % 2 ? 10 : -6), 300 + i * 40]; }
+function queueSpot(q, i) { return q.res ? [q.ct.x + (i % 2 ? 10 : -6), q.ct.y + 45 + i * 40] : [q.ct.x + (i % 2 ? 10 : -6), 369 + i * 40]; }
 
 // =====================================================================
 //  BAU-FELDER (Upgrades)
 // =====================================================================
 const PADS = [
-  { id: 'axes', x: -200, y: 110, ic: '🪓', name: () => S.lv.axes + 1 + '. Axt', cost: () => [12, 45, 150, 480][S.lv.axes - 1], vis: () => true, buy: () => S.lv.axes++ },
-  { id: 'cap', x: -200, y: -50, ic: '🎒', name: () => 'Tragkraft +8', cost: () => [15, 60, 170, 480, 1000][S.lv.cap], vis: () => true, buy: () => S.lv.cap++ },
+  { id: 'axes', x: -265, y: 110, ic: '🪓', name: () => S.lv.axes + 1 + '. Axt', cost: () => [12, 45, 150, 480][S.lv.axes - 1], vis: () => true, buy: () => S.lv.axes++ },
+  { id: 'cap', x: -265, y: -110, ic: '🎒', name: () => 'Tragkraft +8', cost: () => [15, 60, 170, 480, 1000][S.lv.cap], vis: () => true, buy: () => S.lv.cap++ },
   { id: 'tower', x: TOWER.x, y: TOWER.y, ic: '🏹', name: () => 'Armbrustturm', cost: () => S.own.tower ? null : 30, vis: () => S.lv.axes >= 2 || S.lv.cap >= 1, buy: () => S.own.tower = 1 },
-  { id: 'forest', x: 177, y: -102, ic: '🌲', name: () => 'Wald öffnen', cost: () => S.own.forest ? null : 60, vis: () => S.own.tower, buy: () => { S.own.forest = 1; S.nextBliz = S.time + 70; spawnYeti(); } },
+  { id: 'forest', x: 237, y: -137, ic: '🌲', name: () => 'Wald öffnen', cost: () => S.own.forest ? null : 60, vis: () => S.own.tower, buy: () => { S.own.forest = 1; S.nextBliz = S.time + 70; spawnYeti(); } },
   { id: 'kiln', x: KILN.x, y: KILN.y, ic: '⚒️', name: () => 'Kohlenmeiler', cost: () => S.own.kiln ? null : 40, vis: () => S.own.forest, buy: () => S.own.kiln = 1 },
   { id: 'coalCt', x: COAL_CT.zx, y: COAL_CT.zy, ic: '⚫', name: () => 'Kohle-Theke', cost: () => S.own.coalCt ? null : 40, vis: () => S.own.kiln, buy: () => S.own.coalCt = 1 },
   {
-    id: 'furnace', x: 155, y: 170, ic: '🔥', name: () => 'Ofen Stufe ' + (S.lv.furnace + 1),
+    id: 'furnace', x: 185, y: 215, ic: '🔥', name: () => 'Ofen Stufe ' + (S.lv.furnace + 1),
     req: () => furnReq(S.lv.furnace),
     // Höchststufe je Kapitel: bis K2 5, K3 7, K4 9, K5 12, K6 15, nach dem Finale endlos
     vis: () => S.own.tower && (S.lv.furnace < 5 || S.own.lake) && S.lv.furnace < furnCap(),
@@ -112,15 +112,15 @@ const PADS = [
       if (S.lv.furnace >= 8 && S.won < 2) { S.won = 2; banner = { t: 8, a: '🔥 Glutfrost-Legende!', b: 'Der Ofen glüht auf Stufe 8 – das Eis weicht zurück.' }; }
     }
   },
-  { id: 'hunter', x: -200, y: 30, ic: '🧔', name: () => 'Jäger anheuern', cost: () => [120, 420][S.lv.hunter], vis: () => S.own.tower, buy: () => { S.lv.hunter++; spawnNpc('hunter'); } },
-  { id: 'boots', x: 200, y: -50, ic: '🥾', name: () => 'Schneeschuhe', cost: () => [35, 110, 340][S.lv.boots], vis: () => S.own.tower, buy: () => S.lv.boots++ },
-  { id: 'coat', x: 200, y: 30, ic: '🧥', name: () => 'Pelzmantel', cost: () => [50, 160, 420][S.lv.coat], vis: () => S.own.forest, buy: () => S.lv.coat++ },
-  { id: 'server', x: 200, y: 110, ic: '🧑‍🍳', name: () => 'Thekenhelfer', cost: () => S.own.server ? null : 180, vis: () => S.lv.hunter >= 1, buy: () => { S.own.server = 1; spawnNpc('server'); } },
-  { id: 'lumber', x: 155, y: -170, ic: '🪚', name: () => 'Holzfäller', cost: () => S.own.lumber ? null : 220, vis: () => S.own.forest && S.own.kiln, buy: () => { S.own.lumber = 1; spawnNpc('lumber'); } },
-  { id: 'mine', x: -177, y: -102, ic: '⛏️', name: () => 'Eisenmine öffnen', cost: () => S.own.mine ? null : 200, vis: () => S.lv.furnace >= 2, buy: () => S.own.mine = 1 },
-  { id: 'sharp', x: -400, y: -20, cur: 'iron', ic: '⚔️', name: () => 'Axt schärfen', cost: () => [8, 20, 40, 80][S.lv.sharp], vis: () => S.own.mine, buy: () => S.lv.sharp++ },
+  { id: 'hunter', x: -265, y: 0, ic: '🧔', name: () => 'Jäger anheuern', cost: () => [120, 420][S.lv.hunter], vis: () => S.own.tower, buy: () => { S.lv.hunter++; spawnNpc('hunter'); } },
+  { id: 'boots', x: 265, y: -110, ic: '🥾', name: () => 'Schneeschuhe', cost: () => [35, 110, 340][S.lv.boots], vis: () => S.own.tower, buy: () => S.lv.boots++ },
+  { id: 'coat', x: 265, y: 0, ic: '🧥', name: () => 'Pelzmantel', cost: () => [50, 160, 420][S.lv.coat], vis: () => S.own.forest, buy: () => S.lv.coat++ },
+  { id: 'server', x: 265, y: 110, ic: '🧑‍🍳', name: () => 'Thekenhelfer', cost: () => S.own.server ? null : 180, vis: () => S.lv.hunter >= 1, buy: () => { S.own.server = 1; spawnNpc('server'); } },
+  { id: 'lumber', x: 180, y: -215, ic: '🪚', name: () => 'Holzfäller', cost: () => S.own.lumber ? null : 220, vis: () => S.own.forest && S.own.kiln, buy: () => { S.own.lumber = 1; spawnNpc('lumber'); } },
+  { id: 'mine', x: -237, y: -137, ic: '⛏️', name: () => 'Eisenmine öffnen', cost: () => S.own.mine ? null : 200, vis: () => S.lv.furnace >= 2, buy: () => S.own.mine = 1 },
+  { id: 'sharp', x: -470, y: -20, cur: 'iron', optional: () => S.lv.sharp >= 4, ic: '⚔️', name: () => 'Axt schärfen', cost: () => [8, 20, 40, 80, 140, 220, 320, 450, 600, 800][S.lv.sharp], vis: () => S.own.mine, buy: () => S.lv.sharp++ },
   // ---------- Kapitel 2: Siedlung ----------
-  { id: 'settle', x: -150, y: 170, ic: '🏘️', name: () => 'Siedlung erschließen', cost: () => S.own.settle ? null : 500, vis: () => S.lv.furnace >= 3, buy: () => S.own.settle = 1 },
+  { id: 'settle', x: -185, y: 215, ic: '🏘️', name: () => 'Siedlung erschließen', cost: () => S.own.settle ? null : 500, vis: () => S.lv.furnace >= 3, buy: () => S.own.settle = 1 },
   { id: 'smoke', x: SMOKE.x, y: SMOKE.y, ic: '🐟', name: () => 'Räucherei bauen', req: () => S.own.smoke ? null : { cash: 320, wood: 20, stone: 16 }, vis: () => S.own.settle, buy: () => S.own.smoke = 1 },
   { id: 'lake', x: LAKE_X + 40, y: LAKE_GATE.y, ic: '🧊', name: () => 'Eissee öffnen', cost: () => S.own.lake ? null : 650, vis: () => S.own.smoke, buy: () => S.own.lake = 1 },
   { id: 'stall', x: STALL.zx, y: STALL.zy, ic: '🏪', name: () => 'Marktstand bauen', req: () => S.own.stall ? null : { cash: 240, wood: 16 }, vis: () => S.own.smoke, buy: () => S.own.stall = 1 },
@@ -143,7 +143,7 @@ const PAD_TXT = {
   server: ['Füllt die Theken automatisch', 'Die Theken werden jetzt automatisch befüllt – deine Helfer verdienen sogar, während du weg bist.'],
   lumber: ['Fällt Bäume für den Kohlenmeiler', 'Holz kommt jetzt automatisch zum Kohlenmeiler.'],
   mine: ['Eisenerz für schärfere Äxte', 'Baue Erz ab und schärfe damit deine Äxte.'],
-  sharp: ['Mehr Schaden pro Treffer'],
+  sharp: ['Mehr Schaden pro Treffer (10 Stufen)'],
   settle: ['Erweitere dein Lager nach Südwesten', 'Die Siedlung ist offen! Gebäude brauchen Holz 🪵 und Stein 🪨.'],
   smoke: ['Räuchert Fisch aus dem Eissee', 'Leg Fisch auf das linke Feld vor der Räucherei.'],
   lake: ['Angeln & Feuerkristalle', 'Stell dich neben ein Eisloch zum Angeln. Feuerkristalle 🔶 stärken den Ofen!'],
@@ -159,14 +159,14 @@ function furnCap() { return S.finale ? 999 : [5, 5, 5, 7, 9, 12, 15, 15][Math.mi
 function furnReq(l) {
   if (l < 5) return { cash: [120, 360, 900, 1800][l - 1] };
   const T = {
-    5: { cash: 9000, crystal: 15 }, 6: { cash: 18000, crystal: 30 },
-    7: { cash: 24000, crystal: 30, tools: 60 }, 8: { cash: 32000, crystal: 40, tools: 120 },
-    9: { cash: 60000, tools: 40, cloth: 20 }, 10: { cash: 85000, tools: 50, cloth: 40 }, 11: { cash: 120000, tools: 60, cloth: 60 },
-    12: { cash: 160000, crystal: 40, tools: 150, cloth: 150 }, 13: { cash: 210000, crystal: 55, tools: 250, cloth: 250 }, 14: { cash: 280000, crystal: 70, tools: 350, cloth: 350 },
+    5: { cash: 9000, stone: 20, iron: 15, crystal: 15 }, 6: { cash: 18000, stone: 30, iron: 20, crystal: 30 },
+    7: { cash: 24000, stone: 40, iron: 30, crystal: 30, tools: 60 }, 8: { cash: 32000, stone: 50, iron: 40, crystal: 40, tools: 120 },
+    9: { cash: 60000, stone: 60, iron: 45, tools: 40, cloth: 20 }, 10: { cash: 85000, stone: 70, iron: 50, tools: 50, cloth: 40 }, 11: { cash: 120000, stone: 80, iron: 60, tools: 60, cloth: 60 },
+    12: { cash: 160000, stone: 90, iron: 70, crystal: 40, tools: 150, cloth: 150 }, 13: { cash: 210000, stone: 100, iron: 80, crystal: 55, tools: 250, cloth: 250 }, 14: { cash: 280000, stone: 120, iron: 100, crystal: 70, tools: 350, cloth: 350 },
   };
   if (T[l]) return T[l];
   const k = l - 14; // Frostnächte: endlos weiter
-  return { cash: Math.round(280000 * Math.pow(1.3, k) / 1000) * 1000, crystal: 100 + 20 * k, tools: 100 + 20 * k, cloth: 100 + 20 * k };
+  return { cash: Math.round(280000 * Math.pow(1.3, k) / 1000) * 1000, stone: 120 + 15 * k, iron: 100 + 15 * k, crystal: 100 + 20 * k, tools: 100 + 20 * k, cloth: 100 + 20 * k };
 }
 // Kosten: entweder cost() + cur (eine Währung) oder req() mit mehreren Ressourcen.
 // Holz kommt aus dem Rucksack, alles andere sind Vorräte (Geld, Eisen, Stein, Kristalle).

@@ -9,7 +9,7 @@ const TAILOR = { x: 360, y: -1330, r: 28 }, YURT = { x: 240, y: -1480, r: 34 };
 addZone({ id: 'weite', r: WEITE, parent: 'pass', wp: [[PASS.x1 - 40, -1200], [PASS.x1 + 50, -1200]], sub: (x, y) => (x > WYRM_X && y < WYRM_Y) ? 'wyrm' : 'weite',
   subs: [{ id: 'wyrm', parent: 'weite', wp: [[1300, WYRM_Y + 50], [1300, WYRM_Y - 50]] }] });
 GATES.gY = 'wyrmGate';
-fence(315, WEITE.y1, WEITE.x1, WEITE.y1); fence(WEITE.x1, WEITE.y0, WEITE.x1, WEITE.y1); fence(WEITE.x0, WEITE.y0, WEITE.x1, WEITE.y0); fence(WEITE.x0, WEITE.y0, WEITE.x0, PASS.y0);
+fence(FIELD.x1, WEITE.y1, WEITE.x1, WEITE.y1); fence(WEITE.x1, WEITE.y0, WEITE.x1, WEITE.y1); fence(WEITE.x0, WEITE.y0, WEITE.x1, WEITE.y0); fence(WEITE.x0, WEITE.y0, WEITE.x0, PASS.y0);
 fence(WYRM_X, WEITE.y0, WYRM_X, WYRM_Y); fence(WYRM_X, WYRM_Y, 1250, WYRM_Y); fence(1250, WYRM_Y, 1350, WYRM_Y, 'gY'); fence(1350, WYRM_Y, WEITE.x1, WYRM_Y);
 const weiteOpen = () => S.own.weite;
 KIT.warm.push({ x: YURT.x, y: YURT.y, r: 250, on: () => S.own.tailor });
@@ -92,7 +92,7 @@ for (const k of ['trapper', 'seamstress']) if (S.own[k]) spawnKitHelper(k);
 
 // ---------- Schlitten ----------
 const SLEDS = [
-  { id: 'camp', x: 100, y: -330, n: 'Lager', on: () => S.own.sled },
+  { id: 'camp', x: -215, y: -252, n: 'Lager', on: () => S.own.sled },
   { id: 'weite', x: 300, y: -1120, n: 'Weiße Weite', on: () => S.own.sled },
   { id: 'heart', x: PASS_GX + 150, y: -1800, n: 'Eishöhlen', on: () => S.own.sled && S.own.heart },
 ];
@@ -215,11 +215,11 @@ defineBoss(WYRM);
 // ---------- Bau-Felder ----------
 PADS.push(
   { id: 'weite', x: PASS.x1 - 50, y: -1200, ic: '🏔️', name: () => 'Weiße Weite öffnen', cost: () => S.own.weite ? null : 40000, vis: () => S.ch >= 5, buy: () => S.own.weite = 1 },
-  { id: 'tailor', x: TAILOR.x, y: TAILOR.y, ic: '🧵', name: () => 'Schneiderei bauen', req: () => S.own.tailor ? null : { cash: 35000, tools: 40 }, vis: () => S.own.weite, buy: () => S.own.tailor = 1 },
-  { id: 'sled', x: 210, y: -1060, ic: '🛷', name: () => 'Schlittenstationen bauen', req: () => S.own.sled ? null : { cash: 30000, tools: 30, wood: 60 }, vis: () => S.own.weite, buy: () => S.own.sled = 1 },
-  { id: 'trapper', x: 520, y: -1060, ic: '🪤', name: () => 'Fallensteller anheuern', cost: () => S.own.trapper ? null : 50000, vis: () => S.own.tailor, buy: () => { S.own.trapper = 1; spawnKitHelper('trapper'); } },
+  { id: 'tailor', x: TAILOR.x, y: TAILOR.y, ic: '🧵', name: () => 'Schneiderei bauen', req: () => S.own.tailor ? null : { cash: 35000, tools: 40, stone: 60 }, vis: () => S.own.weite, buy: () => S.own.tailor = 1 },
+  { id: 'sled', x: 210, y: -1060, ic: '🛷', name: () => 'Schlittenstationen bauen', req: () => S.own.sled ? null : { cash: 30000, tools: 30, wood: 60, iron: 40 }, vis: () => S.own.weite, buy: () => S.own.sled = 1 },
+  { id: 'trapper', x: 520, y: -1060, ic: '🪤', name: () => 'Fallensteller anheuern', req: () => S.own.trapper ? null : { cash: 50000, iron: 50 }, vis: () => S.own.tailor, buy: () => { S.own.trapper = 1; spawnKitHelper('trapper'); } },
   { id: 'seamstress', x: 610, y: -1060, ic: '🧶', name: () => 'Näherin anheuern', cost: () => S.own.seamstress ? null : 50000, vis: () => S.own.tailor, buy: () => { S.own.seamstress = 1; spawnKitHelper('seamstress'); } },
-  { id: 'wyrmGate', x: 1300, y: WYRM_Y + 70, ic: '🐉', name: () => 'Wyrm-Senke betreten', req: () => S.own.wyrmGate ? null : { cash: 60000, cloth: 40 }, vis: () => S.own.tailor && S.own.sled, buy: () => S.own.wyrmGate = 1 },
+  { id: 'wyrmGate', x: 1300, y: WYRM_Y + 70, ic: '🐉', name: () => 'Wyrm-Senke betreten', req: () => S.own.wyrmGate ? null : { cash: 60000, cloth: 40, iron: 60 }, vis: () => S.own.tailor && S.own.sled, buy: () => S.own.wyrmGate = 1 },
 );
 Object.assign(PAD_TXT, {
   weite: ['Schneeochsen, Fell und Kleidung', 'Die Weiße Weite ist offen. Hier ist es kälter – und im Whiteout eisig!'],
