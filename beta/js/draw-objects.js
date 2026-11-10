@@ -58,19 +58,42 @@ function shadow(rx = 14, ry = 6) { ell(0, 0, rx, ry, 'rgba(40,60,90,.18)'); }
 
 function drawPerson(coat, anim, moving, face, opts = {}) {
   shadow(12, 5);
-  const sw = moving ? Math.sin(anim) * 4 : 0;
+  if (opts.glow) ell(0, -24, 19, 27, 'rgba(255,150,50,.22)');
+  const sw = moving ? Math.sin(anim) * 4 : 0, skin = opts.skin || '#f1c7a0', hair = opts.hairCol || '#8a5a36', fx = face * 1.2;
   rr(-7 + sw * .5, -12, 5, 12, 2, '#2c3646'); rr(2 - sw * .5, -12, 5, 12, 2, '#2c3646');
   rr(-10, -33, 20, 23, 7, coat);
   rr(-10, -16, 20, 4, 2, 'rgba(255,255,255,.85)');
   ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(2, -31, 7, 18);
   // Arme
   rr(-13, -30 - sw * .3, 5, 13, 2.5, coat); rr(8, -30 + sw * .3, 5, 13, 2.5, coat);
-  // Kopf mit Kapuze
-  ell(0, -40, 10.5, 10, coat);
-  ell(0, -39, 8.5, 8, '#f5f2ec');
-  ell(face * 1.2, -38.5, 6, 6, '#f1c7a0');
-  ell(face * 1.2 - 2.2, -39.5, 1, 1.2, '#2a2a2a'); ell(face * 1.2 + 2.2, -39.5, 1, 1.2, '#2a2a2a');
-  if (opts.beard) { ell(face * 1.2, -34.5, 4.5, 2.6, opts.beardCol || '#8a5a36'); if (opts.beardCol) ell(face * 1.2, -32, 3.6, 3.4, opts.beardCol); }
+  if (opts.trim) rr(-11, -34, 22, 5.5, 2.7, opts.trim); // Pelzkragen
+  if (opts.scarf) { rr(-10, -33, 20, 5, 2.5, opts.scarf); rr(face > 0 ? 3 : -7, -31, 4, 11, 2, opts.scarf); }
+  // Kopf: mit Kapuze (Standard) oder mit Haaren und Kopfbedeckung
+  const hd = opts.head || 'hood';
+  if (hd === 'hood' || hd === 'wolfhood' || hd === 'wyrm') {
+    const hc = hd === 'hood' ? coat : hd === 'wolfhood' ? '#8a94a0' : '#7fc4e2';
+    if (hd === 'wolfhood') { poly([-9, -46, -10, -56, -3, -49], hc); poly([9, -46, 10, -56, 3, -49], hc); }
+    if (hd === 'wyrm') poly([-6, -48, -4, -56, -1, -50, 1, -58, 3, -50, 5, -55, 7, -47], '#e9fbff');
+    ell(0, -40, 10.5, 10, hc);
+    ell(0, -39, 8.5, 8, '#f5f2ec');
+    ell(fx, -38.5, 6, 6, skin);
+  } else {
+    ell(-fx * .6, -40.5, 9.2, 9.2, hair);
+    ell(fx, -38.2, 6.8, 6.8, skin);
+    const hat = opts.hatCol || '#c0453a';
+    if (hd === 'cap') { rr(-9, -51, 18, 10, 5, hat); rr(-9.5, -44.5, 19, 4, 2, '#f5f2ec'); ell(0, -52, 3, 3, '#f5f2ec'); }
+    else if (hd === 'fur') { rr(-10, -52, 20, 11, 5, '#8a6a4a'); rr(-11, -44, 4, 9, 2, '#8a6a4a'); rr(7, -44, 4, 9, 2, '#8a6a4a'); rr(-10.5, -45.5, 21, 4.5, 2, '#b89a78'); }
+    else if (hd === 'band') rr(-9, -45.5, 18, 3.4, 1.5, hat);
+    else if (hd === 'horn') { poly([-8, -46, -16, -57, -10, -49], '#f1e6cf'); poly([8, -46, 16, -57, 10, -49], '#f1e6cf'); ell(0, -45.5, 9.5, 6.5, '#9aa4ae'); rr(-9.5, -46, 19, 3.5, 1.5, '#7d8791'); }
+    else if (hd === 'crown') { poly([-8, -44.5, -8, -52, -4, -48, 0, -54, 4, -48, 8, -52, 8, -44.5], '#f5c542'); ell(0, -56, 2.2, 3.4, '#ff8a2a'); ell(0, -55.4, 1.1, 1.8, '#ffe27a'); }
+    else if (hd === 'yeti') { ell(-8, -52, 3.2, 3.2, '#f4f7fa'); ell(8, -52, 3.2, 3.2, '#f4f7fa'); rr(-10, -53, 20, 11, 5.5, '#f4f7fa'); ell(-3, -48.5, 1, 1.1, '#3a4a5a'); ell(3, -48.5, 1, 1.1, '#3a4a5a'); }
+  }
+  ell(fx - 2.2, -39.5, 1, 1.2, '#2a2a2a'); ell(fx + 2.2, -39.5, 1, 1.2, '#2a2a2a');
+  if (opts.beard) {
+    const bc = opts.beardCol || '#8a5a36';
+    ell(fx, -34.5, 4.5, 2.6, bc);
+    if (opts.beardFull != null ? opts.beardFull : !!opts.beardCol) ell(fx, -32, 3.6, 3.4, bc);
+  }
   if (opts.hat) { rr(-8, -52, 16, 5, 2, opts.hat); }
   if (opts.apron) { rr(-7, -27, 14, 15, 3, opts.apron); ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.fillRect(-7, -21, 14, 1.5); }
   if (opts.staff) { rr(12 * face - 1.5, -54, 3, 54, 1.5, '#7a5230'); ell(12 * face, -55, 3.5, 3.5, opts.staff); }

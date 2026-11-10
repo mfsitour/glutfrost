@@ -131,10 +131,10 @@ PADS.push(
   { id: 'smelt', x: SMELT.x, y: SMELT.y, ic: '🔥', name: () => 'Schmelzofen bauen', req: () => S.own.smelt ? null : { cash: 8000, stone: 60 }, vis: () => S.own.ore, buy: () => S.own.smelt = 1 },
   { id: 'anvil', x: ANVIL.x, y: ANVIL.y, ic: '🔨', name: () => 'Amboss bauen', req: () => S.own.anvil ? null : { cash: 10000, iron: 30 }, vis: () => S.own.smelt, buy: () => S.own.anvil = 1 },
   { id: 'forge', x: FORGE_PAD.x, y: FORGE_PAD.y, ic: '⚒️', name: () => 'Ausrüstung schmieden', optional: () => (S.run.forged || 0) >= 1, req: () => ({ cash: 3000 + 2000 * (S.run.forged || 0), tools: 20 + 15 * (S.run.forged || 0) }), vis: () => S.own.anvil, buy: () => { emit('forged', 1, false); gainGear(makeGear('forge')); } },
-  { id: 'miner', x: ORE.x1 - 70, y: -1050, ic: '⛏️', name: () => 'Bergmann anheuern', cost: () => S.own.miner ? null : 12000, vis: () => S.own.smelt, buy: () => { S.own.miner = 1; spawnKitHelper('miner'); } },
-  { id: 'smith', x: ORE.x1 - 160, y: -1050, ic: '🧑‍🏭', name: () => 'Schmiedegeselle', cost: () => S.own.smith ? null : 15000, vis: () => S.own.anvil, buy: () => { S.own.smith = 1; spawnKitHelper('smith'); } },
+  { id: 'miner', x: ORE.x1 - 70, y: -1050, ic: '⛏️', name: () => 'Bergmann anheuern', req: () => S.own.miner ? null : { cash: 12000, iron: 30 }, vis: () => S.own.smelt, buy: () => { S.own.miner = 1; spawnKitHelper('miner'); } },
+  { id: 'smith', x: ORE.x1 - 160, y: -1050, ic: '🧑‍🏭', name: () => 'Schmiedegeselle', req: () => S.own.smith ? null : { cash: 15000, iron: 40 }, vis: () => S.own.anvil, buy: () => { S.own.smith = 1; spawnKitHelper('smith'); } },
   { id: 'prentice', x: ORE.x1 - 250, y: -1050, ic: '🧒', name: () => 'Lehrling anheuern', cost: () => S.own.prentice ? null : 15000, vis: () => S.own.smith, buy: () => { S.own.prentice = 1; spawnKitHelper('prentice'); } },
-  { id: 'golemGate', x: GOLEM_X + 70, y: -1350, ic: '🪨', name: () => 'Golemhalle öffnen', req: () => S.own.golemGate ? null : { cash: 15000, tools: 120 }, vis: () => S.own.anvil && (S.run.forged || 0) >= 1, buy: () => S.own.golemGate = 1 },
+  { id: 'golemGate', x: GOLEM_X + 70, y: -1350, ic: '🪨', name: () => 'Golemhalle öffnen', req: () => S.own.golemGate ? null : { cash: 15000, tools: 120, stone: 60 }, vis: () => S.own.anvil && (S.run.forged || 0) >= 1, buy: () => S.own.golemGate = 1 },
 );
 Object.assign(PAD_TXT, {
   ore: ['Erz, Schmiede und Ausrüstung', 'Die Erzgrube ist offen. Schlag Erz aus den Adern und bring es zum Schmelzofen.'],

@@ -31,7 +31,8 @@ function siteFor(k) {
 // Alles gerade abgebaut? Dann zu dem, das als Nächstes nachwächst (statt wegzulaufen)
 function soonest(list) { let b = null; for (const o of list) if (!b || o.stump < b.stump) b = o; return b; }
 // Was fehlt für die nächste Baustelle, deren Geld schon reicht?
-function matNeed() {
+// stockOnly: nur Stein, Eisen und Kristalle – die landen direkt im Vorrat, der Rucksack muss dafür nicht leer sein
+function matNeed(stockOnly) {
   let best = null;
   for (const p of PADS) {
     if (!padActive(p) || (p.optional && p.optional())) continue;
@@ -40,7 +41,7 @@ function matNeed() {
     let miss = null;
     if (rm.wood > 0) miss = 'wood';
     else for (const k of ['stone', 'crystal', 'iron', 'tools', 'cloth']) if (rm[k] > (S[k] || 0)) { miss = k; break; }
-    if (!miss) continue;
+    if (!miss || (stockOnly && (miss === 'wood' || miss === 'tools' || miss === 'cloth'))) continue; // die brauchen Platz im Rucksack
     if (miss === 'crystal' && !S.own.lake) continue;
     if (miss === 'iron' && !S.own.mine) continue;
     const score = (rm.cash || 0) + 10 * rm[miss];
@@ -82,9 +83,10 @@ function bestBuy(st) {
   return best;
 }
 function northGoal(st) {
-  if (st.length >= cap()) return null;
+  // Ein bezahlbares Bau-Feld im Norden geht vor – auch mit vollem Rucksack (sonst pendelt der Pfeil zwischen Ofen und Schlitten)
   const b = bestBuy(st);
   if (b && (remOf(b.p).cash || 0) <= S.cash && b.p.y < -800) return { x: b.p.x, y: b.p.y, t: 'Kaufen: ' + b.p.name() };
+  if (st.length >= cap()) return null;
   const bh = bossHint(st) || kitBossHint(st); if (bh) return bh;
   return null;
 }
@@ -104,6 +106,8 @@ function hintRaw() {
   const qh = questHint(st); if (qh) return qh;
   // Auf dem Weg nach Norden (Pass/Höhle) unterwegs erbeutetes Fleisch nicht zurückbringen, sonst kommt man nie an
   const north = northGoal(st); if (north) return north;
+  // Ab Kapitel 4 läuft das Lager von selbst: fehlende Vorräte für ein schon bezahlbares Bau-Feld gehen vor
+  if (S.ch >= 4) { const m = matNeed(true); if (m) return m; }
   if (st.includes('raw')) return { ...GRILL_IN, t: 'Bring das rohe Fleisch zum Ofen' };
   if (st.includes('cooked')) return { x: MEAT_CT.zx, y: MEAT_CT.zy, t: 'Bediene die Überlebenden an der Theke' };
   if (st.includes('smoked') && S.own.stall) return { x: STALL.zx, y: STALL.zy, t: 'Verkaufe den Räucherfisch am Marktstand' };

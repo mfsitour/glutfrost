@@ -68,8 +68,8 @@ const ACH = [
   { id: 'cold', n: 'Kalte Füße', d: 'Erfriere ein einziges Mal.', ok: () => stv('deaths') >= 1, r: { cash: 10 } },
 ];
 const RSYM = { cash: ' $', iron: ' ⛓', crystal: ' 🔶', sparks: ' ✨' };
-const rewardTxt = r => Object.keys(r).map(k => '+' + r[k] + RSYM[k]).join('  ');
-function giveReward(r) { for (const k in r) { if (k === 'sparks') S.sparks += r[k]; else S[k] += r[k]; } }
+const rewardTxt = r => Object.keys(r).map(k => '+' + (k === 'box' ? 1 : r[k]) + RSYM[k]).join('  ');
+function giveReward(r) { for (const k in r) { if (k === 'sparks') S.sparks += r[k]; else if (k === 'box') gainGear(makeGear(r[k])); else S[k] += r[k]; } }
 let achT = 0;
 function checkAch(dt) {
   achT -= dt; if (achT > 0) return; achT = 1;
@@ -181,9 +181,10 @@ function renderDiary() {
   const el = $('diaryBody');
   el.innerHTML = DIARY[diaryTab]();
   const c = el.querySelector('canvas.route'); if (c) drawRoute(c, S.ch);
+  const lc = el.querySelector('#lookCv'); if (lc) drawLookPreview(lc);
   el.scrollTop = 0;
 }
-const DIARY = { goals: () => goalsHTML(), ach: () => achHTML(), book: () => bookHTML(), stats: () => statsHTML(), gear: () => gearHTML(), glut: () => glutHTML() };
+const DIARY = { goals: () => goalsHTML(), ach: () => achHTML(), book: () => bookHTML(), stats: () => statsHTML(), gear: () => gearHTML(), glut: () => glutHTML(), look: () => lookHTML() };
 function goalsHTML() {
   const c = curChapter();
   let h = `<div class="kick">Kapitel ${c.n}${c.soon ? ' · bald verfügbar' : ''}</div><h3>${esc(c.title)}</h3><canvas class="route"></canvas><ul class="checks">`;

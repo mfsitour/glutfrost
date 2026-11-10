@@ -55,7 +55,7 @@ function ngGain() {
   return 10 + 2 * Math.max(0, S.lv.furnace - 15) + Math.floor((S.bestNight || 0) / 2);
 }
 function newFire() {
-  const keep = { sparks: S.sparks + ngGain(), glut: S.glut, ach: S.ach, book: S.book, st: S.st, qDone: S.qDone, music: S.music, muted: S.muted, helpSeen: 1, ng: (S.ng || 0) + 1, bestNight: S.bestNight };
+  const keep = { sparks: S.sparks + ngGain(), glut: S.glut, ach: S.ach, book: S.book, st: S.st, qDone: S.qDone, music: S.music, muted: S.muted, helpSeen: 1, ng: (S.ng || 0) + 1, bestNight: S.bestNight, hero: S.hero, look: S.look };
   const d = DEF(); Object.assign(d, keep);
   d.cash = [0, 300, 1500, 5000][glutLv('start')];
   resetting = true; localStorage.setItem(KEY, JSON.stringify(d)); location.reload();

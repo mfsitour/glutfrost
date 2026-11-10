@@ -112,8 +112,8 @@ function moveCircle(e, dx, dy, r) {
 // Wegpunkte für Helfer
 // Zonen bilden einen Baum (Wurzel: Lager). WP[z] = Wegpunkte vom Elternbereich in die Zone.
 const WP = {
-  field: [[0, -195], [0, -300]], forest: [[150, -92], [262, -130], [370, -130]], iron: [[-150, -92], [-262, -130], [-370, -130]],
-  settle: [[-140, 185], [-236, 255], [-236, 420]], lake: [[LAKE_X + 60, LAKE_GATE.y], [LAKE_X - 60, LAKE_GATE.y]],
+  field: [[0, -265], [0, -375]], forest: [[230, -135], [335, GATE_Y], [450, GATE_Y]], iron: [[-230, -135], [-335, GATE_Y], [-450, GATE_Y]],
+  settle: [[-184, 220], [-290, 285], [-290, 420]], lake: [[LAKE_X + 60, LAKE_GATE.y], [LAKE_X - 60, LAKE_GATE.y]],
   pass: [[PASS_GX, -960], [PASS_GX, -1050]], den: [[PASS_GX, DEN_Y + 40], [PASS_GX, DEN_Y - 50]],
 };
 const ZPAR = { field: 'camp', forest: 'camp', iron: 'camp', settle: 'camp', lake: 'settle', pass: 'field', den: 'pass' };
@@ -184,7 +184,7 @@ function update(dt) {
     const dF = dist(player.x, player.y, FURN.x, FURN.y);
     const inCamp = inHexPt(player.x, player.y, HR);
     if (dF < heatR() || inCamp || nearBraz()) player.warm = Math.min(100, player.warm + 22 * dt);
-    else player.warm = Math.max(0, player.warm - (blizzard() ? 7 : 2.2) * (1 - .22 * S.lv.coat) * (1 - gearV('cold')) * coldMul() * dt);
+    else player.warm = Math.max(0, player.warm - (blizzard() ? 7 : 2.2) * (1 - .22 * S.lv.coat) * (1 - gearV('cold')) * (1 - heroV('cold')) * coldMul() * dt);
     if (player.warm <= 0) { player.hp -= 6 * dt; if (Math.random() < dt * 2) ftext(player.x, player.y, 70, 'Kalt!', '#9fd8ff', 16); }
     if (inCamp) player.hp = Math.min(100, player.hp + 14 * dt);
     else if (nearWarm()) player.hp = Math.min(100, player.hp + 5 * dt); // an Feuern und Öfen draußen heilt man langsam
@@ -204,8 +204,12 @@ function update(dt) {
     for (const p of PADS) {
       const on = dist(player.x, player.y, p.x, p.y) < 32;
       if (!on) { p.lock = false; p.onT = 0; continue; }
+      // Freiwillige Felder (Verstärken, Schärfen ab Stufe 5, Schmieden) zahlen erst, wenn man darauf stehen bleibt –
+      // sonst verschwinden Stein und Eisen schon beim Darüberlaufen
+      const vol = p.optional && p.optional();
+      if (vol && player.moving) { p.onT = 0; continue; }
       p.onT = (p.onT || 0) + dt;
-      if (padActive(p) && !p.lock && p.onT > .3) payPad(p, dt);
+      if (padActive(p) && !p.lock && p.onT > (vol ? .6 : .3)) payPad(p, dt);
     }
   }
 
@@ -469,7 +473,7 @@ function updateNpc(n, dt) {
       for (const o of pool) {
         if (isH ? o.dead : (o.stump || o.zone !== 'forest')) continue;
         if (npcs.some(m => m !== n && m.target === o)) continue;
-        const d = dist(o.x, o.y, n.x, n.y) + (isH ? 0 : Math.abs(o.y + 130) * .5);
+        const d = dist(o.x, o.y, n.x, n.y) + (isH ? 0 : Math.abs(o.y - GATE_Y) * .5);
         if (d < bd) { bd = d; best = o; }
       }
       n.target = best;
@@ -530,7 +534,7 @@ function updateNpc(n, dt) {
     for (const j of jobs) if (j.on() && S[j.ctKey] < 25 && S[j.key] > 0 && (!best || S[j.ctKey] < S[best.ctKey])) best = j;
     n.src = best;
   }
-  if (!n.src) { if (n.stack.length) n.mode = 'deliver'; else { const ip = { server: [0, 150], seller: [-300, 520], armorer: [150, -200] }[n.kind]; npcGo(n, ip[0], ip[1], SP * .6, dt); } return; }
+  if (!n.src) { if (n.stack.length) n.mode = 'deliver'; else { const ip = { server: [0, 190], seller: [-300, 520], armorer: [165, -235] }[n.kind]; npcGo(n, ip[0], ip[1], SP * .6, dt); } return; }
   const j = n.src;
   if (npcGo(n, j.pos.x, j.pos.y + 6, SP, dt) || dist(n.x, n.y, j.pos.x, j.pos.y) < 20) {
     if (n.xfer <= 0) {
@@ -580,7 +584,7 @@ function updateQueue(q, dt) {
           fly(q.item, q.ct.x + rand(-20, 20), q.ct.y, 26, s.x, s.y, 30, .2);
         }
         if (s.got >= s.want) {
-          const amount = Math.round(s.want * q.price() * (q.item === 'cooked' ? bookMul('animals') : q.item === 'smoked' ? bookMul('fish') : 1) * gearMul('cash') * (1 + .1 * glutLv('cash')) * salesMul() * priceMul() * (bookMul('heart') > 1 ? 1.05 : 1));
+          const amount = Math.round(s.want * q.price() * (q.item === 'cooked' ? bookMul('animals') : q.item === 'smoked' ? bookMul('fish') : 1) * gearMul('cash') * heroMul('cash') * (1 + .1 * glutLv('cash')) * salesMul() * priceMul() * (bookMul('heart') > 1 ? 1.05 : 1));
           s.state = 'leave'; s.lx = q.ct.x + rand(-40, 40);
           S.sold += s.want; emit('served'); emit({ cooked: 'meatSold', coal: 'coalSold', smoked: 'fishSold' }[q.item], s.want, false); emit('earned', amount, false);
           const bills = Math.min(8, amount);

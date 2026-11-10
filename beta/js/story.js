@@ -114,8 +114,8 @@ function drawRoute(c, ch) {
 //  FIGUREN
 // =====================================================================
 const FIG = {
-  mara: { name: 'Mara', role: 'die Älteste', x: -62, y: 142, coat: '#7d4f9e', face: 1, opts: { staff: '#ffb12b', hat: '#e8e2f0' }, vis: () => true },
-  bjarne: { name: 'Bjarne', role: 'der Schmied', x: 62, y: 142, coat: '#6b4a32', face: -1, opts: { beard: true, beardCol: '#c9c2b8', apron: '#3d2c22' }, vis: () => true },
+  mara: { name: 'Mara', role: 'die Älteste', x: -85, y: 178, coat: '#7d4f9e', face: 1, opts: { staff: '#ffb12b', hat: '#e8e2f0' }, vis: () => true },
+  bjarne: { name: 'Bjarne', role: 'der Schmied', x: 85, y: 178, coat: '#6b4a32', face: -1, opts: { beard: true, beardCol: '#c9c2b8', apron: '#3d2c22' }, vis: () => true },
   ole: { name: 'Ole', role: 'der alte Fischer', x: LAKE_X - 70, y: 712, coat: '#3a6d8c', face: 1, opts: { beard: true, beardCol: '#e8e8e8', hat: '#2b4a66' }, vis: () => S.own.lake },
 };
 // Was die Figuren nebenbei sagen (passend zum Fortschritt)
@@ -192,7 +192,7 @@ function updateQuests(dt) {
       const pool = QUESTS[id].filter(t => t.ok() && t.id !== f.lastQ);
       if (pool.length) {
         const tp = pool[randi(0, pool.length - 1)];
-        S.offers[id] = { id: tp.id, n: tp.n(), r: Object.assign({ cash: questReward() }, tp.r || {}) };
+        S.offers[id] = { id: tp.id, n: tp.n(), r: Object.assign({ cash: questReward() }, typeof tp.r === 'function' ? tp.r() : tp.r || {}) };
       }
     }
     // Annehmen: zur Figur gehen und kurz stehen bleiben
@@ -207,6 +207,13 @@ function updateQuests(dt) {
         snd('pick'); S.diaryNew = 1; save();
       }
     }
+  }
+  // Vorrats-Aufträge (Stein, Eisen, Werkzeug, Kleidung): bei der Figur stehen, dann wird aus dem Vorrat geliefert
+  for (const q of S.quests) {
+    const tp = questTpl(q), f = FIG[q.fig];
+    if (!tp.res || q.got >= q.n || dist(player.x, player.y, f.x, f.y) > 50) continue;
+    const n = Math.min(4, q.n - q.got, S[tp.res] || 0);
+    if (n > 0) { S[tp.res] -= n; q.got += n; snd('pick'); ftext(f.x, f.y, 70, '−' + n + ' ' + SYM[tp.res], '#ffe7b0', 14); }
   }
   for (const q of S.quests.slice()) if (q.got >= q.n) finishQuest(q);
 }
@@ -236,6 +243,7 @@ function questHint(st) {
   for (const q of S.quests) {
     const tp = questTpl(q), f = FIG[q.fig];
     if (tp.item && st.includes(tp.item) && q.got < q.n && f.vis()) return { x: f.x, y: f.y + 30, t: `Bring es zu ${f.name} (${q.got}/${q.n})` };
+    if (tp.res && q.got < q.n && (S[tp.res] || 0) >= q.n - q.got && f.vis()) return { x: f.x, y: f.y + 30, t: `Bring ${f.name} die Ware (${q.got}/${q.n})` };
   }
   return null;
 }
@@ -259,7 +267,7 @@ function addFigures(add, t) {
     const fc = player.x > f.x ? 1 : -1, look = dist(player.x, player.y, f.x, f.y) < 160 ? fc : f.face;
     add(f.y, () => {
       at(f.x, f.y); ell(0, 0, 18, 8, 'rgba(255,200,90,.22)');
-      ctx.translate(0, Math.sin(t * 2 + f.x) * .6);
+      ctx.translate(0, Math.sin(t * 2 + f.x) * .6); if (f.scale) ctx.scale(f.scale, f.scale);
       drawPerson(f.coat, 0, false, look, Object.assign({}, f.opts, { staff: f.opts.staff && look ? f.opts.staff : null }));
     });
   }

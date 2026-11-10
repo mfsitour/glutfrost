@@ -50,7 +50,7 @@ function wolfTarget() {
   return opts[randi(0, opts.length - 1)];
 }
 const wallUp = () => S.own.wall && ch3.wallHp > 0;
-const wallMax = () => 60 + 10 * S.nightNo;
+const wallMax = () => Math.round((60 + 10 * S.nightNo) * (1 + .25 * S.lv.wall)); // „Palisade verstärken“: +25 % je Stufe
 const frozen = k => (S.frz[k] || 0) > S.time;
 function hurtWolf(w, n, src) {
   if (w.dead) return;
@@ -178,7 +178,7 @@ function updateTowers(dt) {
     const b = wbolts[i], g = b.tgt;
     if (g.dead || g.gone) { wbolts.splice(i, 1); continue; }
     const d = dist(b.x, b.y, g.x, g.y);
-    if (d < 14) { wbolts.splice(i, 1); hurtWolf(g, 3 + Math.floor(S.lv.furnace / 2), 'tower'); continue; }
+    if (d < 14) { wbolts.splice(i, 1); hurtWolf(g, 3 + Math.floor(S.lv.furnace / 2) + S.lv.watch, 'tower'); continue; }
     b.x += (g.x - b.x) / d * b.sp * dt; b.y += (g.y - b.y) / d * b.sp * dt; b.z = lerp(b.z, 20, dt * 4);
   }
 }
@@ -281,11 +281,14 @@ function ch3Solids(a) {
 // =====================================================================
 PADS.push(
   { id: 'pass', x: PASS_GX, y: -930, ic: '🏔️', name: () => 'Wolfspass öffnen', cost: () => S.own.pass ? null : 4500, vis: () => S.ch >= 3, buy: () => { S.own.pass = 1; S.dayT = 0; } },
-  { id: 'wall', x: 0, y: -196, ic: '🪵', name: () => 'Palisade bauen', req: () => S.own.wall ? null : { cash: 4000, wood: 50 }, vis: () => S.own.pass, buy: () => { S.own.wall = 1; ch3.wallHp = wallMax(); } },
+  { id: 'wall', x: 0, y: -262, ic: '🪵', name: () => 'Palisade bauen', req: () => S.own.wall ? null : { cash: 4000, wood: 50 }, vis: () => S.own.pass, buy: () => { S.own.wall = 1; ch3.wallHp = wallMax(); } },
   { id: 'watch1', x: WATCH[0].x, y: WATCH[0].y, ic: '🗼', name: () => 'Wachturm bauen', req: () => S.own.watch1 ? null : { cash: 6000, stone: 50 }, vis: () => S.own.pass, buy: () => { S.own.watch1 = 1; S.shots += 30; } },
   { id: 'ammoSt', x: AMMO.x, y: AMMO.y, ic: '🧺', name: () => 'Munitionslager bauen', req: () => S.own.ammoSt ? null : { cash: 2500, wood: 30 }, vis: () => S.own.watch1, buy: () => S.own.ammoSt = 1 },
   { id: 'watch2', x: WATCH[1].x, y: WATCH[1].y, ic: '🗼', name: () => '2. Wachturm bauen', req: () => S.own.watch2 ? null : { cash: 10000, stone: 60 }, vis: () => S.own.ammoSt && S.nightsOk >= 1, buy: () => S.own.watch2 = 1 },
-  { id: 'armorer', x: 155, y: -170, ic: '🛡️', name: () => 'Zeugwart anheuern', cost: () => S.own.armorer ? null : 8000, vis: () => S.own.ammoSt && S.own.lumber && S.own.kiln, buy: () => { S.own.armorer = 1; spawnNpc('armorer'); } },
+  // Dauerhafte Verwendung für Stein und Eisen: beliebig oft verstärken (freiwillig, der Pfeil führt nicht dorthin)
+  { id: 'wallUp', x: 70, y: -215, ic: '🪨', name: () => 'Palisade verstärken ' + (S.lv.wall + 1), desc: 'Hält 25 % mehr aus · stehen bleiben', optional: () => true, req: () => ({ cash: Math.round(1500 * (S.lv.wall + 1) * priceMul()), stone: 40 + 25 * S.lv.wall }), vis: () => S.own.wall, buy: () => { S.lv.wall++; ch3.wallHp = wallMax(); } },
+  { id: 'watchUp', x: -70, y: -215, ic: '⛓️', name: () => 'Wachtürme verstärken ' + (S.lv.watch + 1), desc: 'Bolzen treffen härter · stehen bleiben', optional: () => true, req: () => ({ cash: Math.round(1500 * (S.lv.watch + 1) * priceMul()), iron: 30 + 20 * S.lv.watch }), vis: () => S.own.watch1, buy: () => S.lv.watch++ },
+  { id: 'armorer', x: 180, y: -215, ic: '🛡️', name: () => 'Zeugwart anheuern', cost: () => S.own.armorer ? null : 8000, vis: () => S.own.ammoSt && S.own.lumber && S.own.kiln, buy: () => { S.own.armorer = 1; spawnNpc('armorer'); } },
   { id: 'den', x: PASS_GX, y: DEN_Y + 70, ic: '🐺', name: () => 'Höhle betreten', cost: () => S.own.den ? null : 8000, vis: () => S.own.wall && S.own.watch1 && S.nightsOk >= 5, buy: () => { S.own.den = 1; spawnBoss(); } },
 );
 Object.assign(PAD_TXT, {
@@ -350,7 +353,7 @@ function ch3Hint(st) {
     if (w && player.hp > 25) return { x: w.x, y: w.y, t: 'Verteidige das Lager! 🐺', soft: 1 };
   }
   const p = phase();
-  if (p >= DUSK - 20 && p < NIGHT && zoneOf(player.x, player.y) !== 'camp' && dist(player.x, player.y, 0, 0) > 500) return { x: 0, y: -150, t: 'Zurück ins Lager – die Nacht kommt! 🌙' };
+  if (p >= DUSK - 20 && p < NIGHT && zoneOf(player.x, player.y) !== 'camp' && dist(player.x, player.y, 0, 0) > 500) return { x: 0, y: -200, t: 'Zurück ins Lager – die Nacht kommt! 🌙' };
   return null;
 }
 function ammoHint(st) {
@@ -443,7 +446,7 @@ function drawWall(t) {
     rr(-5, -h, 10, h, 2, '#8a5a32'); poly([-5, -h, 0, -h - 7, 5, -h], broken ? '#6b4426' : '#a8764a');
     rr(-5, -h, 4, h, 2, 'rgba(255,255,255,.12)');
   }
-  if (!broken) { at(0, NGATE.y); rr(-46, -24, 92, 5, 2, '#6b4426'); rr(-46, -12, 92, 5, 2, '#6b4426'); }
+  if (!broken) { at(0, NGATE.y); rr(-58, -24, 116, 5, 2, '#6b4426'); rr(-58, -12, 116, 5, 2, '#6b4426'); }
   if (hp < wallMax() && S.own.wall) { at(0, NGATE.y, 50); rr(-30, -4, 60, 7, 3, 'rgba(0,0,0,.4)'); rr(-29, -3, 58 * clamp(hp / wallMax(), 0, 1), 5, 2, '#ffb34d'); }
 }
 function drawWatch(t, aim) {

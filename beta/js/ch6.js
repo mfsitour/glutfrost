@@ -145,9 +145,9 @@ KIT.overlay.push(t => {
 // ---------- Bau-Felder ----------
 PADS.push(
   { id: 'heart', x: PASS_GX, y: PASS.y0 + 60, ic: '🕳️', name: () => 'Eishöhlen betreten', cost: () => S.own.heart ? null : 120000, vis: () => S.ch >= 6, buy: () => S.own.heart = 1 },
-  { id: 'reveal', x: GLUT.x, y: GLUT.y + 260, ic: '💠', name: () => 'Glutherz freilegen', req: () => S.siege ? null : { cash: 150000, tools: 80, cloth: 80 }, vis: () => S.own.heart && (S.nests || 0) >= 5, buy: () => { S.siege = 1; toast('⚠️ Ylva warnt', 'In der nächsten Nacht greifen sie alle an!'); } },
+  { id: 'reveal', x: GLUT.x, y: GLUT.y + 260, ic: '💠', name: () => 'Glutherz freilegen', req: () => S.siege ? null : { cash: 150000, tools: 80, cloth: 80, stone: 120, iron: 80 }, vis: () => S.own.heart && (S.nests || 0) >= 5, buy: () => { S.siege = 1; toast('⚠️ Ylva warnt', 'In der nächsten Nacht greifen sie alle an!'); } },
   { id: 'guardGate', x: GLUT.x + 150, y: GLUT.y + 260, ic: '🛡️', name: () => 'Frostwächter herausfordern', cost: () => S.own.guardGate ? null : 50000, vis: () => S.siege >= 2, buy: () => S.own.guardGate = 1 },
-  { id: 'ignite', x: GLUT.x, y: GLUT.y + 110, ic: '🔥', name: () => 'Glutherz entfachen', req: () => S.finale ? null : { cash: 250000, crystal: 80, tools: 400, cloth: 400 }, vis: () => S.guardDead && S.lv.furnace >= 15, buy: ignite },
+  { id: 'ignite', x: GLUT.x, y: GLUT.y + 110, ic: '🔥', name: () => 'Glutherz entfachen', req: () => S.finale ? null : { cash: 250000, crystal: 80, tools: 400, cloth: 400, stone: 150, iron: 150 }, vis: () => S.guardDead && S.lv.furnace >= 15, buy: ignite },
 );
 Object.assign(PAD_TXT, {
   heart: ['Dunkle Eishöhlen voller Spinnen', 'Die Eishöhlen sind offen. Nimm dich vor den Spinnennestern in Acht – an den Feuern ist Licht.'],
@@ -214,8 +214,9 @@ function drawGlutherz(t) {
 }
 KIT.hud.push(top => { if (S.siege === 1) txt('⚔️ Die letzte Belagerung steht bevor', W / 2, top + 178, 13, '#ffd0a0', 'center', '#5a2a10'); });
 // Hinweise: Nester zerstören
-KIT.hintLate.push(st => {
-  if (!heartOpen() || st.length > 4 || player.hp < 60) return null;
+// (früh in der Kette: unterwegs eingesammeltes Fleisch soll einen nicht mehr ins Lager zurückschicken)
+KIT.hintEarly.push(st => {
+  if (!heartOpen() || st.length >= cap() || player.hp < 60) return null;
   const n = nearestOf(nests, player.x, player.y, o => !o.stump);
   return n && { x: n.x, y: n.y + 40, t: 'Zerstöre die Spinnennester 🕸️ (' + (S.nests || 0) + '/5)', soft: 1 };
 });

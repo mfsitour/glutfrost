@@ -24,11 +24,11 @@ function drawGround(t) {
   drawHoles(t);
   // Weg der Überlebenden
   ctx.fillStyle = 'rgba(190,205,220,.45)';
-  ctx.fillRect(-140, 270, 100, 630); ctx.fillRect(40, 270, 100, 630);
+  ctx.fillRect(-160, 340, 100, 560); ctx.fillRect(60, 340, 100, 560);
   // Korridore
   ctx.fillStyle = '#d9a47b';
-  ctx.beginPath(); ctx.moveTo(200, -172); ctx.lineTo(318, -172); ctx.lineTo(318, -88); ctx.lineTo(249, -88); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(-200, -172); ctx.lineTo(-318, -172); ctx.lineTo(-318, -88); ctx.lineTo(-249, -88); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(259, -209); ctx.lineTo(398, -209); ctx.lineTo(398, -120); ctx.lineTo(310, -120); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-259, -209); ctx.lineTo(-398, -209); ctx.lineTo(-398, -120); ctx.lineTo(-310, -120); ctx.closePath(); ctx.fill();
   // Lager-Boden
   ctx.beginPath(); for (let i = 0; i < 6; i++) { const [x, y] = hexV(i); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.closePath();
   ctx.fillStyle = '#d29a70'; ctx.fill();
@@ -181,7 +181,7 @@ function draw(now) {
       at(player.x, player.y);
       ell(0, 0, 20, 9, 'rgba(60,200,255,.25)');
       ctx.strokeStyle = 'rgba(120,220,255,.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, 20, 9, 0, 0, TAU); ctx.stroke();
-      drawPerson('#25a2c9', player.anim, player.moving, player.face, { beard: true });
+      { const lk = lookOpts(); drawPerson(lk.coat, player.anim, player.moving, player.face, lk.o); }
       if (playerHole) fishLine(player.x + 8 * player.face, player.y, 36, playerHole, t);
     });
     for (let i = 0; i < S.lv.axes; i++) {
